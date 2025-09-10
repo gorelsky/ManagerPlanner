@@ -11,6 +11,33 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Логин и пароль обязательны" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ message: "Неверный логин или пароль" });
+      }
+
+      // В реальном приложении здесь должна быть проверка хешированного пароля
+      if (user.password !== password) {
+        return res.status(401).json({ message: "Неверный логин или пароль" });
+      }
+
+      // Не возвращаем пароль в ответе
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      res.status(500).json({ message: "Внутренняя ошибка сервера" });
+    }
+  });
+
   // Users
   app.get("/api/users/managers", async (req, res) => {
     try {

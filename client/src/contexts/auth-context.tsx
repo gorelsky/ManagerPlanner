@@ -27,30 +27,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Имитация загрузки пользователя при старте
-    // В реальном приложении здесь был бы запрос к API
+    // Проверяем сохраненного пользователя при старте
     const savedUser = localStorage.getItem("user");
     if (savedUser) {
       try {
-        setUser(JSON.parse(savedUser));
+        const user = JSON.parse(savedUser);
+        setUser(user);
       } catch (error) {
         localStorage.removeItem("user");
       }
-    } else {
-      // Для демонстрации используем тестового пользователя
-      const demoUser: User = {
-        id: "1",
-        username: "pervakova",
-        password: "password123",
-        firstName: "Наталья",
-        lastName: "Первакова", 
-        middleName: "Владимировна",
-        profileImage: null,
-        role: "manager",
-        createdAt: new Date(),
-      };
-      setUser(demoUser);
-      localStorage.setItem("user", JSON.stringify(demoUser));
     }
     setIsLoading(false);
   }, []);
