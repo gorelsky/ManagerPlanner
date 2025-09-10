@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import UserProfile from "@/components/user-profile";
+import UserMenu from "@/components/user-menu";
 import DateNavigation from "@/components/date-navigation";
 import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
