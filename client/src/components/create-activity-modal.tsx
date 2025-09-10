@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { insertActivitySchema } from "@shared/schema";
 import { activityApi, cityApi, employeeApi, activityTypeApi } from "@/lib/api";
@@ -16,8 +17,8 @@ import type { InsertActivity } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = insertActivitySchema.extend({
-  startDate: z.string().min(1, "Дата начала обязательна"),
-  endDate: z.string().min(1, "Дата окончания обязательна"),
+  startDate: z.date({ required_error: "Дата начала обязательна" }),
+  endDate: z.date({ required_error: "Дата окончания обязательна" }),
   startTime: z.string().min(1, "Время начала обязательно"),
   endTime: z.string().min(1, "Время окончания обязательно"),
 });
@@ -45,8 +46,8 @@ export default function CreateActivityModal({
       title: "",
       description: "",
       status: "planned",
-      startDate: new Date().toISOString().split('T')[0], // Сегодняшняя дата
-      endDate: new Date().toISOString().split('T')[0],   // Сегодняшняя дата
+      startDate: new Date(), // Сегодняшняя дата
+      endDate: new Date(),   // Сегодняшняя дата
       startTime: "09:00", // Время по умолчанию
       endTime: "18:00",   // Время по умолчанию
       typeId: "",
@@ -87,8 +88,8 @@ export default function CreateActivityModal({
         title: "",
         description: "",
         status: "planned",
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
+        startDate: new Date(),
+        endDate: new Date(),
         startTime: "09:00",
         endTime: "18:00",
         typeId: "",
@@ -106,8 +107,15 @@ export default function CreateActivityModal({
   });
 
   const onSubmit = (data: FormData) => {
-    const startDateTime = new Date(`${data.startDate}T${data.startTime}`);
-    const endDateTime = new Date(`${data.endDate}T${data.endTime}`);
+    // Объединяем дату и время в один объект Date
+    const [startHour, startMinute] = data.startTime.split(':').map(Number);
+    const [endHour, endMinute] = data.endTime.split(':').map(Number);
+    
+    const startDateTime = new Date(data.startDate);
+    startDateTime.setHours(startHour, startMinute, 0, 0);
+    
+    const endDateTime = new Date(data.endDate);
+    endDateTime.setHours(endHour, endMinute, 0, 0);
 
     const activityData: InsertActivity = {
       userId: data.userId,
@@ -172,20 +180,26 @@ export default function CreateActivityModal({
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="startDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Дата начала</FormLabel>
+                  <FormControl>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Выберите дату начала"
+                      data-testid="input-start-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Дата начала</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} value={field.value || ""} data-testid="input-start-date" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={form.control}
                 name="startTime"
@@ -194,22 +208,6 @@ export default function CreateActivityModal({
                     <FormLabel>Время начала</FormLabel>
                     <FormControl>
                       <Input type="time" {...field} value={field.value || ""} data-testid="input-start-time" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Дата окончания</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} value={field.value || ""} data-testid="input-end-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -229,6 +227,25 @@ export default function CreateActivityModal({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="endDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Дата окончания</FormLabel>
+                  <FormControl>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Выберите дату окончания"
+                      data-testid="input-end-date"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
