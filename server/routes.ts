@@ -12,6 +12,15 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Users
+  app.get("/api/users/managers", async (req, res) => {
+    try {
+      const managers = await storage.getManagersList();
+      res.json(managers);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/users/:id", async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
@@ -19,15 +28,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       res.json(user);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  app.get("/api/users/managers", async (req, res) => {
-    try {
-      const managers = await storage.getManagersList();
-      res.json(managers);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }
