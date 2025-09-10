@@ -11,11 +11,9 @@ import DateNavigation from "@/components/date-navigation";
 import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
+import { useAuth } from "@/contexts/auth-context";
 import { userApi, activityApi } from "@/lib/api";
 import type { ActivityWithDetails } from "@shared/schema";
-
-// Mock user ID - in real app this would come from auth
-const MOCK_USER_ID = "1";
 
 export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -23,25 +21,22 @@ export default function Dashboard() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const startDate = startOfMonth(currentDate);
   const endDate = endOfMonth(currentDate);
 
-  const { data: user } = useQuery({
-    queryKey: ["/api/users", MOCK_USER_ID],
-    queryFn: () => userApi.getUser(MOCK_USER_ID),
-  });
-
   const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["/api/activities/user", MOCK_USER_ID, startDate, endDate],
-    queryFn: () => activityApi.getActivitiesByUser(MOCK_USER_ID, startDate, endDate),
+    queryKey: ["/api/activities/user", user?.id, startDate, endDate],
+    queryFn: () => activityApi.getActivitiesByUser(user?.id!, startDate, endDate),
+    enabled: !!user?.id,
   });
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       activityApi.updateActivityStatus(id, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", MOCK_USER_ID] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
       toast({
         title: "Успешно",
         description: "Статус активности обновлен",
@@ -210,7 +205,7 @@ export default function Dashboard() {
       <CreateActivityModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
-        userId={MOCK_USER_ID}
+        userId={user?.id || ""}
       />
     </div>
   );

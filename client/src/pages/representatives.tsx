@@ -5,15 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/bottom-navigation";
+import { useAuth } from "@/contexts/auth-context";
 import { employeeApi } from "@/lib/api";
 import type { Employee } from "@shared/schema";
 
 export default function Representatives() {
-  const userId = "8f4eb15b-8b68-4cf1-bebe-8f5e7c2d9b41"; // TODO: Get from auth context
+  const { user } = useAuth();
 
   const { data: representatives = [], isLoading } = useQuery({
-    queryKey: ["/api/employees/manager", userId],
-    queryFn: () => employeeApi.getEmployeesByManager(userId),
+    queryKey: ["/api/employees/manager", user?.id],
+    queryFn: () => employeeApi.getEmployeesByManager(user?.id!),
+    enabled: !!user?.id,
   });
 
   const getInitials = (firstName: string, lastName: string) => {
