@@ -39,9 +39,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } else {
       // Для демонстрации используем тестового пользователя
       const demoUser: User = {
-        id: "8f4eb15b-8b68-4cf1-bebe-8f5e7c2d9b41",
+        id: "1",
         username: "pervakova",
-        password: "hashed_password",
+        password: "password123",
         firstName: "Наталья",
         lastName: "Первакова", 
         middleName: "Владимировна",

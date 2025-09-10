@@ -3,16 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import BottomNavigation from "@/components/bottom-navigation";
+import { useAuth } from "@/contexts/auth-context";
 import { activityApi } from "@/lib/api";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from "date-fns";
-
-// Mock user ID
-const MOCK_USER_ID = "1";
 
 type Period = "week" | "month" | "quarter";
 
 export default function Analytics() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
+  const { user } = useAuth();
 
   const getPeriodDates = (period: Period) => {
     const now = new Date();
@@ -29,8 +28,9 @@ export default function Analytics() {
   const { start, end } = getPeriodDates(selectedPeriod);
 
   const { data: activities = [] } = useQuery({
-    queryKey: ["/api/activities/user", MOCK_USER_ID, start, end],
-    queryFn: () => activityApi.getActivitiesByUser(MOCK_USER_ID, start, end),
+    queryKey: ["/api/activities/user", user?.id, start, end],
+    queryFn: () => activityApi.getActivitiesByUser(user?.id!, start, end),
+    enabled: !!user?.id,
   });
 
   // Calculate statistics
