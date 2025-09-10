@@ -16,10 +16,10 @@ import type { InsertActivity } from "@shared/schema";
 import { z } from "zod";
 
 const formSchema = insertActivitySchema.extend({
-  startDate: z.string(),
-  endDate: z.string(),
-  startTime: z.string(),
-  endTime: z.string(),
+  startDate: z.string().min(1, "Дата начала обязательна"),
+  endDate: z.string().min(1, "Дата окончания обязательна"),
+  startTime: z.string().min(1, "Время начала обязательно"),
+  endTime: z.string().min(1, "Время окончания обязательно"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -45,10 +45,10 @@ export default function CreateActivityModal({
       title: "",
       description: "",
       status: "planned",
-      startDate: "",
-      endDate: "",
-      startTime: "",
-      endTime: "",
+      startDate: new Date().toISOString().split('T')[0], // Сегодняшняя дата
+      endDate: new Date().toISOString().split('T')[0],   // Сегодняшняя дата
+      startTime: "09:00", // Время по умолчанию
+      endTime: "18:00",   // Время по умолчанию
       typeId: "",
       cityId: "",
       employeeId: "",
@@ -82,7 +82,19 @@ export default function CreateActivityModal({
         description: "Активность создана",
       });
       onOpenChange(false);
-      form.reset();
+      form.reset({
+        userId,
+        title: "",
+        description: "",
+        status: "planned",
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
+        startTime: "09:00",
+        endTime: "18:00",
+        typeId: "",
+        cityId: "",
+        employeeId: "",
+      });
     },
     onError: () => {
       toast({
@@ -168,7 +180,7 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Дата начала</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-start-date" />
+                      <Input type="date" {...field} value={field.value || ""} data-testid="input-start-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -181,7 +193,7 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Время начала</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} data-testid="input-start-time" />
+                      <Input type="time" {...field} value={field.value || ""} data-testid="input-start-time" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -197,7 +209,7 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Дата окончания</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-end-date" />
+                      <Input type="date" {...field} value={field.value || ""} data-testid="input-end-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -210,7 +222,7 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Время окончания</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} data-testid="input-end-time" />
+                      <Input type="time" {...field} value={field.value || ""} data-testid="input-end-time" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
