@@ -26,6 +26,11 @@ export const employees = pgTable("employees", {
   lastName: text("last_name").notNull(),
   middleName: text("middle_name"),
   managerId: varchar("manager_id").references(() => users.id),
+  cityId: varchar("city_id").references(() => cities.id),
+  profileImage: text("profile_image"),
+  position: text("position").default("Медицинский представитель"),
+  phone: text("phone"),
+  email: text("email"),
 });
 
 export const activityTypes = pgTable("activity_types", {
@@ -63,6 +68,10 @@ export const employeesRelations = relations(employees, ({ one, many }) => ({
   manager: one(users, {
     fields: [employees.managerId],
     references: [users.id],
+  }),
+  city: one(cities, {
+    fields: [employees.cityId],
+    references: [cities.id],
   }),
   activities: many(activities),
 }));
@@ -135,4 +144,9 @@ export type ActivityWithDetails = Activity & {
   type: ActivityType;
   city: City;
   employee?: Employee;
+};
+
+export type EmployeeWithDetails = Employee & {
+  manager?: User;
+  city?: City;
 };
