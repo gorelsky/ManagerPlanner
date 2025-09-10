@@ -2,10 +2,9 @@ import {
   users, cities, employees, activityTypes, activities,
   type User, type InsertUser,
   type City, type InsertCity,
-  type Employee, type InsertEmployee,
+  type Employee, type InsertEmployee, type EmployeeWithDetails,
   type ActivityType, type InsertActivityType,
-  type Activity, type InsertActivity,
-  type ActivityWithDetails
+  type Activity, type InsertActivity, type ActivityWithDetails
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc } from "drizzle-orm";
@@ -15,14 +14,17 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getManagersList(): Promise<User[]>;
 
   // Cities
   getCities(): Promise<City[]>;
   createCity(city: InsertCity): Promise<City>;
 
   // Employees
-  getEmployeesByManager(managerId: string): Promise<Employee[]>;
+  getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
+  getAllEmployees(): Promise<EmployeeWithDetails[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
+  importEmployees(csvData: string): Promise<{ imported: number }>;
 
   // Activity Types
   getActivityTypes(): Promise<ActivityType[]>;
@@ -68,8 +70,110 @@ export class DatabaseStorage implements IStorage {
     return city;
   }
 
-  async getEmployeesByManager(managerId: string): Promise<Employee[]> {
-    return await db.select().from(employees).where(eq(employees.managerId, managerId));
+  async getManagersList(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, "manager")).orderBy(asc(users.lastName));
+  }
+
+  async getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]> {
+    const result = await db
+      .select({
+        id: employees.id,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        middleName: employees.middleName,
+        managerId: employees.managerId,
+        cityId: employees.cityId,
+        profileImage: employees.profileImage,
+        position: employees.position,
+        phone: employees.phone,
+        email: employees.email,
+        manager: users,
+        city: cities,
+      })
+      .from(employees)
+      .leftJoin(users, eq(employees.managerId, users.id))
+      .leftJoin(cities, eq(employees.cityId, cities.id))
+      .where(eq(employees.managerId, managerId))
+      .orderBy(asc(employees.lastName));
+    
+    return result.map(row => ({
+      ...row,
+      manager: row.manager || undefined,
+      city: row.city || undefined,
+    }));
+  }
+
+  async getAllEmployees(): Promise<EmployeeWithDetails[]> {
+    const result = await db
+      .select({
+        id: employees.id,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        middleName: employees.middleName,
+        managerId: employees.managerId,
+        cityId: employees.cityId,
+        profileImage: employees.profileImage,
+        position: employees.position,
+        phone: employees.phone,
+        email: employees.email,
+        manager: users,
+        city: cities,
+      })
+      .from(employees)
+      .leftJoin(users, eq(employees.managerId, users.id))
+      .leftJoin(cities, eq(employees.cityId, cities.id))
+      .orderBy(asc(employees.lastName));
+    
+    return result.map(row => ({
+      ...row,
+      manager: row.manager || undefined,
+      city: row.city || undefined,
+    }));
+  }
+
+  async importEmployees(csvData: string): Promise<{ imported: number }> {
+    const lines = csvData.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    let imported = 0;
+
+    // Получить все города и менеджеров для поиска по именам
+    const allCities = await this.getCities();
+    const allManagers = await this.getManagersList();
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const employeeData: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        employeeData[header] = values[index];
+      });
+
+      // Найти ID города и менеджера
+      const city = allCities.find(c => c.name === employeeData.city);
+      const manager = allManagers.find(m => m.username === employeeData.manager);
+
+      if (!city || !manager) continue;
+
+      try {
+        await this.createEmployee({
+          firstName: employeeData.firstName,
+          lastName: employeeData.lastName,
+          middleName: employeeData.middleName || undefined,
+          managerId: manager.id,
+          cityId: city.id,
+          profileImage: employeeData.profileImage || undefined,
+          position: employeeData.position || "Медицинский представитель",
+          phone: employeeData.phone || undefined,
+          email: employeeData.email || undefined,
+        });
+        imported++;
+      } catch (error) {
+        console.error('Error importing employee:', error);
+      }
+    }
+
+    return { imported };
   }
 
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {

@@ -8,6 +8,7 @@ import Dashboard from "@/pages/dashboard";
 import Representatives from "@/pages/representatives";
 import Analytics from "@/pages/analytics";
 import Visits from "@/pages/visits";
+import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/reps" component={Representatives} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/visits" component={Visits} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );

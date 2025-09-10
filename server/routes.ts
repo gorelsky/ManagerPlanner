@@ -24,6 +24,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/managers", async (req, res) => {
+    try {
+      const managers = await storage.getManagersList();
+      res.json(managers);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/users", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
@@ -61,10 +70,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Employees
+  app.get("/api/employees/all", async (req, res) => {
+    try {
+      const employees = await storage.getAllEmployees();
+      res.json(employees);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/employees/manager/:managerId", async (req, res) => {
     try {
       const employees = await storage.getEmployeesByManager(req.params.managerId);
       res.json(employees);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/employees/import", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+      if (!csvData || typeof csvData !== 'string') {
+        return res.status(400).json({ message: "Invalid CSV data" });
+      }
+      const result = await storage.importEmployees(csvData);
+      res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });
     }

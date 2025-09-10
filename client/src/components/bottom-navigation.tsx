@@ -1,9 +1,11 @@
 import { Link, useLocation } from "wouter";
-import { PenTool, BarChart3, Users, MessageCircle } from "lucide-react";
+import { PenTool, BarChart3, Users, MessageCircle, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function BottomNavigation() {
   const [location] = useLocation();
+  const { user } = useAuth();
 
   const navItems = [
     { 
@@ -31,6 +33,16 @@ export default function BottomNavigation() {
       testId: "nav-visits"
     },
   ];
+
+  // Добавляем админскую панель только для админов
+  if (user?.role === "admin") {
+    navItems.push({
+      path: "/admin",
+      icon: Settings,
+      label: "Админ",
+      testId: "nav-admin"
+    });
+  }
 
   return (
     <nav className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border" data-testid="bottom-navigation">

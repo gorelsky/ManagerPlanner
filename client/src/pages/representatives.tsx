@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Phone, Mail, MapPin, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { employeeApi } from "@/lib/api";
-import type { Employee } from "@shared/schema";
+import type { EmployeeWithDetails } from "@shared/schema";
 
 export default function Representatives() {
   const { user } = useAuth();
@@ -57,39 +57,59 @@ export default function Representatives() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {representatives.map((rep: Employee) => (
+          {representatives.map((rep: EmployeeWithDetails) => (
             <Card key={rep.id} className="p-4" data-testid={`card-representative-${rep.id}`}>
               <div className="flex items-start space-x-4">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-blue-100 text-blue-600">
+                <Avatar className="w-16 h-16">
+                  {rep.profileImage ? (
+                    <AvatarImage src={rep.profileImage} alt={`${rep.firstName} ${rep.lastName}`} />
+                  ) : null}
+                  <AvatarFallback className="bg-blue-100 text-blue-600 text-lg">
                     {getInitials(rep.firstName, rep.lastName)}
                   </AvatarFallback>
                 </Avatar>
                 
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-foreground" data-testid={`text-name-${rep.id}`}>
-                      {rep.lastName} {rep.firstName}
-                      {rep.middleName && ` ${rep.middleName}`}
-                    </h3>
+                    <div>
+                      <h3 className="font-semibold text-foreground text-lg" data-testid={`text-name-${rep.id}`}>
+                        {rep.lastName} {rep.firstName}
+                        {rep.middleName && ` ${rep.middleName}`}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {rep.position || "Медицинский представитель"}
+                      </p>
+                    </div>
                     <Badge variant="secondary" className="text-xs">
                       МП
                     </Badge>
                   </div>
                   
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-2">
-                      <Phone className="w-4 h-4" />
-                      <span>+7 (900) 123-45-67</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Mail className="w-4 h-4" />
-                      <span>{rep.firstName.toLowerCase()}.{rep.lastName.toLowerCase()}@company.ru</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>Москва, Центральный округ</span>
-                    </div>
+                  <div className="space-y-2 text-sm">
+                    {rep.phone && (
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Phone className="w-4 h-4" />
+                        <span>{rep.phone}</span>
+                      </div>
+                    )}
+                    {rep.email && (
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <Mail className="w-4 h-4" />
+                        <span>{rep.email}</span>
+                      </div>
+                    )}
+                    {rep.city && (
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <MapPin className="w-4 h-4" />
+                        <span>{rep.city.name}</span>
+                      </div>
+                    )}
+                    {rep.manager && (
+                      <div className="flex items-center space-x-2 text-muted-foreground">
+                        <User className="w-4 h-4" />
+                        <span>Менеджер: {rep.manager.lastName} {rep.manager.firstName}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex space-x-2 pt-2">

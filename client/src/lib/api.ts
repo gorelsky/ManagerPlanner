@@ -5,7 +5,8 @@ import type {
   Employee, InsertEmployee,
   ActivityType, InsertActivityType,
   Activity, InsertActivity,
-  ActivityWithDetails
+  ActivityWithDetails,
+  EmployeeWithDetails
 } from "@shared/schema";
 
 // Users
@@ -15,6 +16,9 @@ export const userApi = {
   
   createUser: (user: InsertUser): Promise<User> =>
     apiRequest("POST", "/api/users", user).then(res => res.json()),
+
+  getManagersList: (): Promise<User[]> =>
+    apiRequest("GET", "/api/users/managers").then(res => res.json()),
 };
 
 // Cities
@@ -28,11 +32,17 @@ export const cityApi = {
 
 // Employees
 export const employeeApi = {
-  getEmployeesByManager: (managerId: string): Promise<Employee[]> =>
+  getEmployeesByManager: (managerId: string): Promise<EmployeeWithDetails[]> =>
     apiRequest("GET", `/api/employees/manager/${managerId}`).then(res => res.json()),
+  
+  getAllEmployees: (): Promise<EmployeeWithDetails[]> =>
+    apiRequest("GET", "/api/employees/all").then(res => res.json()),
   
   createEmployee: (employee: InsertEmployee): Promise<Employee> =>
     apiRequest("POST", "/api/employees", employee).then(res => res.json()),
+
+  importEmployees: (csvData: string): Promise<{ imported: number }> =>
+    apiRequest("POST", "/api/employees/import", { csvData }).then(res => res.json()),
 };
 
 // Activity Types
