@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   lastName: text("last_name").notNull(),
   middleName: text("middle_name"),
   profileImage: text("profile_image"),
+  role: text("role").notNull().default("manager"), // manager, admin
   createdAt: timestamp("created_at").defaultNow(),
 });
 

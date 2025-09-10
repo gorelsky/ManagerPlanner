@@ -13,22 +13,22 @@ export default function BottomNavigation() {
       testId: "nav-entry"
     },
     { 
+      path: "/reps", 
+      icon: Users, 
+      label: "МП",
+      testId: "nav-reps"
+    },
+    { 
       path: "/analytics", 
       icon: BarChart3, 
-      label: "МП",
+      label: "Аналитика",
       testId: "nav-analytics"
     },
     { 
       path: "/visits", 
-      icon: Users, 
-      label: "Визит Эквивалент",
-      testId: "nav-visits"
-    },
-    { 
-      path: "/chat", 
       icon: MessageCircle, 
-      label: "Чат",
-      testId: "nav-chat"
+      label: "Визиты",
+      testId: "nav-visits"
     },
   ];
 
