@@ -6,7 +6,8 @@ import {
   insertCitySchema, 
   insertEmployeeSchema, 
   insertActivityTypeSchema, 
-  insertActivitySchema 
+  insertActivitySchema,
+  insertMessageSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -239,6 +240,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/activities/:id", async (req, res) => {
     try {
       await storage.deleteActivity(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Messages
+  app.get("/api/messages/:userId", async (req, res) => {
+    try {
+      const messages = await storage.getMessages(req.params.userId);
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/messages", async (req, res) => {
+    try {
+      const messageData = insertMessageSchema.parse(req.body);
+      const message = await storage.createMessage(messageData);
+      res.status(201).json(message);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid message data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/messages/:id/read", async (req, res) => {
+    try {
+      await storage.markMessageAsRead(req.params.id);
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

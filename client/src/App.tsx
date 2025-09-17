@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import Dashboard from "@/pages/dashboard";
 import Representatives from "@/pages/representatives";
 import Analytics from "@/pages/analytics";
-import Visits from "@/pages/visits";
+import Chat from "@/pages/chat";
 import Admin from "@/pages/admin";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
@@ -35,7 +35,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/reps" component={Representatives} />
       <Route path="/analytics" component={Analytics} />
-      <Route path="/visits" component={Visits} />
+      <Route path="/chat" component={Chat} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>

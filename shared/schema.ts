@@ -55,10 +55,21 @@ export const activities = pgTable("activities", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  receiverId: varchar("receiver_id").references(() => users.id), // null для общего чата
+  content: text("content").notNull(),
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   activities: many(activities),
   employees: many(employees),
+  sentMessages: many(messages, { relationName: "sender" }),
+  receivedMessages: many(messages, { relationName: "receiver" }),
 }));
 
 export const citiesRelations = relations(cities, ({ many }) => ({
@@ -100,6 +111,17 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   }),
 }));
 
+export const messagesRelations = relations(messages, ({ one }) => ({
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+  }),
+  receiver: one(users, {
+    fields: [messages.receiverId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -124,6 +146,11 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   updatedAt: true,
 });
 
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -140,6 +167,9 @@ export type InsertActivityType = z.infer<typeof insertActivityTypeSchema>;
 export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
 // Extended types with relations
 export type ActivityWithDetails = Activity & {
   type: ActivityType;
@@ -150,4 +180,9 @@ export type ActivityWithDetails = Activity & {
 export type EmployeeWithDetails = Employee & {
   manager?: User;
   city?: City;
+};
+
+export type MessageWithDetails = Message & {
+  sender: User;
+  receiver?: User;
 };

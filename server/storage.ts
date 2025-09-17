@@ -1,13 +1,14 @@
 import { 
-  users, cities, employees, activityTypes, activities,
+  users, cities, employees, activityTypes, activities, messages,
   type User, type InsertUser,
   type City, type InsertCity,
   type Employee, type InsertEmployee, type EmployeeWithDetails,
   type ActivityType, type InsertActivityType,
-  type Activity, type InsertActivity, type ActivityWithDetails
+  type Activity, type InsertActivity, type ActivityWithDetails,
+  type Message, type InsertMessage, type MessageWithDetails
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, desc, asc } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -38,6 +39,11 @@ export interface IStorage {
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;
   updateActivityStatus(id: string, status: string): Promise<Activity>;
+
+  // Messages
+  getMessages(userId: string): Promise<MessageWithDetails[]>;
+  createMessage(message: InsertMessage): Promise<Message>;
+  markMessageAsRead(messageId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -361,6 +367,85 @@ export class DatabaseStorage implements IStorage {
       .where(eq(activities.id, id))
       .returning();
     return activity;
+  }
+
+  async getMessages(userId: string): Promise<MessageWithDetails[]> {
+    const result = await db
+      .select({
+        id: messages.id,
+        senderId: messages.senderId,
+        receiverId: messages.receiverId,
+        content: messages.content,
+        isRead: messages.isRead,
+        createdAt: messages.createdAt,
+        sender: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          middleName: users.middleName,
+          profileImage: users.profileImage,
+          role: users.role,
+          password: users.password,
+          createdAt: users.createdAt,
+        },
+      })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(
+        or(
+          // Сообщения где пользователь является отправителем
+          eq(messages.senderId, userId),
+          // Сообщения где пользователь является получателем
+          eq(messages.receiverId, userId),
+          // Общие сообщения (receiverId = null)
+          isNull(messages.receiverId)
+        )
+      )
+      .orderBy(desc(messages.createdAt));
+
+    // Получаем информацию о получателях для сообщений
+    const messagesWithDetails: MessageWithDetails[] = [];
+    
+    for (const row of result) {
+      let receiver: any = undefined;
+      
+      if (row.receiverId) {
+        const [receiverData] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, row.receiverId));
+        receiver = receiverData;
+      }
+
+      messagesWithDetails.push({
+        id: row.id,
+        senderId: row.senderId,
+        receiverId: row.receiverId,
+        content: row.content,
+        isRead: row.isRead,
+        createdAt: row.createdAt,
+        sender: row.sender,
+        receiver,
+      });
+    }
+
+    return messagesWithDetails;
+  }
+
+  async createMessage(insertMessage: InsertMessage): Promise<Message> {
+    const [message] = await db
+      .insert(messages)
+      .values(insertMessage)
+      .returning();
+    return message;
+  }
+
+  async markMessageAsRead(messageId: string): Promise<void> {
+    await db
+      .update(messages)
+      .set({ isRead: true })
+      .where(eq(messages.id, messageId));
   }
 }
 

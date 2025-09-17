@@ -27,10 +27,10 @@ export default function BottomNavigation() {
       testId: "nav-analytics"
     },
     { 
-      path: "/visits", 
+      path: "/chat", 
       icon: MessageCircle, 
-      label: "Визиты",
-      testId: "nav-visits"
+      label: "Чат",
+      testId: "nav-chat"
     },
   ];
 
