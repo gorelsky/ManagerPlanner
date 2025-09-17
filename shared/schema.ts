@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -37,6 +37,7 @@ export const activityTypes = pgTable("activity_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   requiresEmployee: boolean("requires_employee").default(false),
+  visitEquivalent: numeric("visit_equivalent", { precision: 3, scale: 1 }).notNull().default("1.0"),
 });
 
 export const activities = pgTable("activities", {

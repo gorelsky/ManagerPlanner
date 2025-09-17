@@ -11,6 +11,13 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize activity types on server start
+  try {
+    await storage.initializeActivityTypes();
+  } catch (error) {
+    console.error("Failed to initialize activity types:", error);
+  }
+
   // Authentication
   app.post("/api/auth/login", async (req, res) => {
     try {

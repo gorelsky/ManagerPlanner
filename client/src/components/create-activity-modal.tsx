@@ -16,11 +16,13 @@ import { activityApi, cityApi, employeeApi, activityTypeApi } from "@/lib/api";
 import type { InsertActivity } from "@shared/schema";
 import { z } from "zod";
 
-const formSchema = insertActivitySchema.extend({
+const formSchema = insertActivitySchema.omit({ title: true }).extend({
   startDate: z.date({ required_error: "Дата начала обязательна" }),
   endDate: z.date({ required_error: "Дата окончания обязательна" }),
   startTime: z.string().min(1, "Время начала обязательно"),
   endTime: z.string().min(1, "Время окончания обязательно"),
+  typeId: z.string().min(1, "Тип активности обязателен"),
+  cityId: z.string().min(1, "Город обязателен"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -43,7 +45,6 @@ export default function CreateActivityModal({
     resolver: zodResolver(formSchema),
     defaultValues: {
       userId,
-      title: "",
       description: "",
       status: "planned",
       startDate: new Date(), // Сегодняшняя дата
@@ -85,7 +86,6 @@ export default function CreateActivityModal({
       onOpenChange(false);
       form.reset({
         userId,
-        title: "",
         description: "",
         status: "planned",
         startDate: new Date(),
@@ -117,12 +117,16 @@ export default function CreateActivityModal({
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
+    // Используем название типа активности как title
+    const selectedType = activityTypes.find(type => type.id === data.typeId);
+    const activityTitle = selectedType?.name || "Активность";
+
     const activityData: InsertActivity = {
       userId: data.userId,
       typeId: data.typeId,
       cityId: data.cityId,
       employeeId: data.employeeId ? data.employeeId : undefined,
-      title: data.title,
+      title: activityTitle,
       description: data.description,
       startDate: startDateTime,
       endDate: endDateTime,
@@ -166,19 +170,6 @@ export default function CreateActivityModal({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Название</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Название активности" {...field} data-testid="input-activity-title" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

@@ -29,6 +29,7 @@ export interface IStorage {
   // Activity Types
   getActivityTypes(): Promise<ActivityType[]>;
   createActivityType(activityType: InsertActivityType): Promise<ActivityType>;
+  initializeActivityTypes(): Promise<void>;
 
   // Activities
   getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
@@ -194,6 +195,56 @@ export class DatabaseStorage implements IStorage {
       .values(insertActivityType)
       .returning();
     return activityType;
+  }
+
+  async initializeActivityTypes(): Promise<void> {
+    const existingTypes = await this.getActivityTypes();
+    
+    // Список всех типов активностей с ВЭ значениями
+    const defaultActivityTypes = [
+      { name: "Административная работа (проверка фин отчетов, собственная фин отчетность, работа с аналитикой и т.д.)", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Аудит визит", visitEquivalent: "1.5", requiresEmployee: true },
+      { name: "Больничный", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Визит в офис АС", visitEquivalent: "3.0", requiresEmployee: false },
+      { name: "Визит к дистрибьютору", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Визит к OPL", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Внеплановое обслуживание корп. авто (заправка, шиномонтаж)", visitEquivalent: "1.0", requiresEmployee: false },
+      { name: "Возвращение домой из служебной поездки", visitEquivalent: "6.0", requiresEmployee: false },
+      { name: "Групповая презентация (лекция)", visitEquivalent: "4.0", requiresEmployee: false },
+      { name: "Двойной Визит", visitEquivalent: "1.5", requiresEmployee: true },
+      { name: "Индивидуальные визиты ТМ", visitEquivalent: "1.0", requiresEmployee: true },
+      { name: "Командировка (однодневная)", visitEquivalent: "4.0", requiresEmployee: false },
+      { name: "Конференция", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Круглый стол", visitEquivalent: "10.0", requiresEmployee: false },
+      { name: "Отгул", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Отпуск", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Переезд в место служебной поездки", visitEquivalent: "6.0", requiresEmployee: false },
+      { name: "Плановое обслуживание корп. авто (прохождение ТО)", visitEquivalent: "7.0", requiresEmployee: false },
+      { name: "Получение грузов (POSM, образцы и т.д)", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Работа в офисе (для Менеджеров)", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Работа в CRM", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Собеседование", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "Собрание", visitEquivalent: "4.0", requiresEmployee: false },
+      { name: "Тестирование", visitEquivalent: "4.0", requiresEmployee: false },
+      { name: "Тренинг", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Участие в цикловой конференции", visitEquivalent: "14.0", requiresEmployee: false },
+      { name: "Фармкружок", visitEquivalent: "2.0", requiresEmployee: false },
+      { name: "ФУВ", visitEquivalent: "4.0", requiresEmployee: false },
+    ];
+
+    // Создаем только те типы, которых еще нет
+    for (const activityType of defaultActivityTypes) {
+      const exists = existingTypes.find(existing => existing.name === activityType.name);
+      if (!exists) {
+        try {
+          await this.createActivityType(activityType);
+        } catch (error) {
+          console.error(`Error creating activity type "${activityType.name}":`, error);
+        }
+      }
+    }
+
+    console.log(`Activity types initialized. Total: ${defaultActivityTypes.length}`);
   }
 
   async getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
