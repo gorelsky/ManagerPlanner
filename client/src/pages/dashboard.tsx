@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Menu, Search, Plus } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import UserProfile from "@/components/user-profile";
-import UserMenu from "@/components/user-menu";
+import SideMenu from "@/components/side-menu";
 import DateNavigation from "@/components/date-navigation";
 import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
@@ -118,9 +118,7 @@ export default function Dashboard() {
       {/* Header */}
       <header className="bg-blue-header text-white px-4 py-4">
         <div className="flex items-center justify-between mb-4">
-          <button className="text-white" data-testid="button-menu">
-            <Menu className="w-6 h-6" />
-          </button>
+          <SideMenu />
           <h1 className="text-lg font-semibold">План-факт активностей</h1>
           <div></div>
         </div>

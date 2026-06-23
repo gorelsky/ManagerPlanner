@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/bottom-navigation";
+import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { employeeApi } from "@/lib/api";
 import type { EmployeeWithDetails } from "@shared/schema";
@@ -32,11 +33,16 @@ export default function Representatives() {
   }
 
   return (
-    <div className="p-4 pb-20">
+    <div className="pb-20">
+      <header className="bg-blue-header text-white px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <SideMenu />
+          <h1 className="text-lg font-semibold">Медицинские представители</h1>
+          <div></div>
+        </div>
+      </header>
+      <div className="p-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground">
-          Медицинские представители
-        </h1>
         <Button size="sm" data-testid="button-add-representative">
           <Plus className="w-4 h-4 mr-1" />
           Добавить
@@ -127,6 +133,7 @@ export default function Representatives() {
         </div>
       )}
 
+      </div>
       <BottomNavigation />
     </div>
   );

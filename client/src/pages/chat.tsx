@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Phone, Video } from "lucide-react";
+import { Send, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
-import UserMenu from "@/components/user-menu";
+import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -92,14 +92,16 @@ export default function Chat() {
     <div className="min-h-screen bg-background">
       <div className="max-w-sm mx-auto bg-card min-h-screen flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/95">
-          <div>
-            <h1 className="text-xl font-semibold">Чат</h1>
-            <p className="text-sm text-muted-foreground">
-              Общение с командой
-            </p>
+        <div className="flex items-center justify-between p-4 border-b border-border bg-blue-header text-white">
+          <div className="flex items-center space-x-3">
+            <SideMenu />
+            <div>
+              <h1 className="text-xl font-semibold">Чат</h1>
+              <p className="text-sm text-white/70">
+                Общение с командой
+              </p>
+            </div>
           </div>
-          <UserMenu />
         </div>
 
         {/* Messages */}

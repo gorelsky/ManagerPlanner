@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
+import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { employeeApi, userApi } from "@/lib/api";
 import type { EmployeeWithDetails, User } from "@shared/schema";
@@ -90,16 +91,18 @@ export default function Admin() {
   };
 
   return (
-    <div className="p-4 pb-20">
+    <div className="pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground">
-          Панель администратора
-        </h1>
-        <Badge variant="outline" className="text-blue-600">
-          Админ
-        </Badge>
-      </div>
+      <header className="bg-blue-header text-white px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <SideMenu />
+          <h1 className="text-lg font-semibold">Админ-панель</h1>
+          <Badge variant="outline" className="bg-white/10 text-white border-white/20">
+            Админ
+          </Badge>
+        </div>
+      </header>
+      <div className="p-4">
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -217,6 +220,7 @@ export default function Admin() {
       </Card>
 
       <BottomNavigation />
+    </div>
     </div>
   );
 }

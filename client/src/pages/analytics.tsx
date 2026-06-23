@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import BottomNavigation from "@/components/bottom-navigation";
+import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi } from "@/lib/api";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from "date-fns";
@@ -61,7 +62,11 @@ export default function Analytics() {
     <div className="min-h-screen pb-20">
       {/* Header */}
       <header className="bg-blue-header text-white px-4 py-6">
-        <h1 className="text-lg font-semibold text-center">Аналитика активностей</h1>
+        <div className="flex items-center justify-between mb-4">
+          <SideMenu />
+          <h1 className="text-lg font-semibold">Аналитика</h1>
+          <div></div>
+        </div>
       </header>
 
       <div className="p-6">
