@@ -183,6 +183,7 @@ export default function CreateActivityModal({
                       onChange={field.onChange}
                       placeholder="Выберите дату начала"
                       data-testid="input-start-date"
+                      minDate={new Date()}
                     />
                   </FormControl>
                   <FormMessage />

@@ -19,6 +19,8 @@ interface DatePickerProps {
   disabled?: boolean;
   className?: string;
   "data-testid"?: string;
+  minDate?: Date;
+  maxDate?: Date;
 }
 
 export function DatePicker({
@@ -28,6 +30,8 @@ export function DatePicker({
   disabled = false,
   className,
   "data-testid": testId,
+  minDate,
+  maxDate,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -58,6 +62,11 @@ export function DatePicker({
           }}
           initialFocus
           locale={ru}
+          disabled={(date) => {
+            if (minDate && date < minDate) return true;
+            if (maxDate && date > maxDate) return true;
+            return false;
+          }}
         />
       </PopoverContent>
     </Popover>

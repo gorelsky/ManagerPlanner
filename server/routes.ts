@@ -202,7 +202,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/activities", async (req, res) => {
     try {
-      const activityData = insertActivitySchema.parse(req.body);
+      // Преобразуем строки дат в Date объекты
+      const body = req.body;
+      if (body.startDate) body.startDate = new Date(body.startDate);
+      if (body.endDate) body.endDate = new Date(body.endDate);
+      
+      // Проверка: запрет добавления активностей задним числом
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const startDate = new Date(body.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      
+      if (startDate < now) {
+        return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
+      }
+      
+      const activityData = insertActivitySchema.parse(body);
       const activity = await storage.createActivity(activityData);
       res.status(201).json(activity);
     } catch (error) {
