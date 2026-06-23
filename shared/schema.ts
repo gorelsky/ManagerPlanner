@@ -175,6 +175,7 @@ export type ActivityWithDetails = Activity & {
   type: ActivityType;
   city: City;
   employee?: Employee;
+  managerName?: string;
 };
 
 export type EmployeeWithDetails = Employee & {

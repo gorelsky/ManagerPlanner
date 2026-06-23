@@ -36,6 +36,7 @@ export interface IStorage {
 
   // Activities
   getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
+  getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
   getActivity(id: string): Promise<ActivityWithDetails | undefined>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
@@ -281,14 +282,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
-    const conditions = [eq(activities.userId, userId)];
-    if (startDate) {
-      conditions.push(gte(activities.startDate, startDate));
-    }
-    if (endDate) {
-      conditions.push(lte(activities.endDate, endDate));
-    }
+    const conditions: any[] = [eq(activities.userId, userId)];
+    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (endDate) conditions.push(lte(activities.endDate, endDate));
+    return this.queryActivities(conditions);
+  }
 
+  async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
+    const conditions: any[] = [];
+    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (endDate) conditions.push(lte(activities.endDate, endDate));
+    return this.queryActivities(conditions);
+  }
+
+  private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
     const result = await db
       .select({
         id: activities.id,
@@ -306,19 +313,24 @@ export class DatabaseStorage implements IStorage {
         type: activityTypes,
         city: cities,
         employee: employees,
+        managerFirstName: users.firstName,
+        managerLastName: users.lastName,
+        managerUsername: users.username,
       })
       .from(activities)
       .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
       .leftJoin(cities, eq(activities.cityId, cities.id))
       .leftJoin(employees, eq(activities.employeeId, employees.id))
-      .where(and(...conditions))
+      .leftJoin(users, eq(activities.userId, users.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(activities.startDate));
-    
+
     return result.map(row => ({
       ...row,
       type: row.type!,
       city: row.city!,
       employee: row.employee || undefined,
+      managerName: `${row.managerFirstName || ''} ${row.managerLastName || ''}`.trim() || row.managerUsername || '',
     }));
   }
 

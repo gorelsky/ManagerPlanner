@@ -56,6 +56,15 @@ export const activityTypeApi = {
 
 // Activities
 export const activityApi = {
+  getAllActivities: (startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> => {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate.toISOString());
+    if (endDate) params.append("endDate", endDate.toISOString());
+    
+    const url = `/api/activities/all${params.toString() ? `?${params.toString()}` : ""}`;
+    return apiRequest("GET", url).then(res => res.json());
+  },
+
   getActivitiesByUser: (userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate.toISOString());

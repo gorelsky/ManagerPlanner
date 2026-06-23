@@ -175,6 +175,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Activities
+  app.get("/api/activities/all", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      
+      const activities = await storage.getAllActivities(start, end);
+      res.json(activities);
+    } catch (error) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/activities/user/:userId", async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
