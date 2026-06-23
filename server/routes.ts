@@ -12,11 +12,13 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize activity types on server start
+  // Initialize database with seed data
   try {
+    await storage.initializeUsers();
+    await storage.initializeCities();
     await storage.initializeActivityTypes();
   } catch (error) {
-    console.error("Failed to initialize activity types:", error);
+    console.error("Failed to initialize data:", error);
   }
 
   // Authentication

@@ -31,6 +31,8 @@ export interface IStorage {
   getActivityTypes(): Promise<ActivityType[]>;
   createActivityType(activityType: InsertActivityType): Promise<ActivityType>;
   initializeActivityTypes(): Promise<void>;
+  initializeUsers(): Promise<void>;
+  initializeCities(): Promise<void>;
 
   // Activities
   getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
@@ -201,6 +203,31 @@ export class DatabaseStorage implements IStorage {
       .values(insertActivityType)
       .returning();
     return activityType;
+  }
+
+  async initializeUsers(): Promise<void> {
+    const existingUsers = await db.select().from(users);
+    if (existingUsers.length === 0) {
+      await db.insert(users).values([
+        { username: "admin", password: "admin123", firstName: "Администратор", lastName: "Системы", role: "admin" },
+        { username: "pervakova", password: "password123", firstName: "Наталья", lastName: "Первакова", middleName: "Владимировна", role: "manager" },
+      ]);
+      console.log("Users initialized");
+    }
+  }
+
+  async initializeCities(): Promise<void> {
+    const existingCities = await db.select().from(cities);
+    if (existingCities.length === 0) {
+      await db.insert(cities).values([
+        { name: "Москва" },
+        { name: "Санкт-Петербург" },
+        { name: "Новосибирск" },
+        { name: "Екатеринбург" },
+        { name: "Казань" },
+      ]);
+      console.log("Cities initialized");
+    }
   }
 
   async initializeActivityTypes(): Promise<void> {
