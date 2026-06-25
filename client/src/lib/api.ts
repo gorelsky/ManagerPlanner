@@ -19,6 +19,12 @@ export const userApi = {
 
   getManagersList: (): Promise<User[]> =>
     apiRequest("GET", "/api/users/managers").then(res => res.json()),
+
+  importUsers: (csvData: string, role: "manager" | "admin"): Promise<{ imported: number }> =>
+    apiRequest("POST", "/api/users/import", { csvData, role }).then(res => res.json()),
+
+  deleteUser: (id: string): Promise<void> =>
+    apiRequest("DELETE", `/api/users/${id}`).then(() => {}),
 };
 
 // Cities

@@ -185,7 +185,43 @@ export class DatabaseStorage implements IStorage {
 
     return { imported };
   }
+async importUsersFromCsv(csvData: string, role: "manager" | "admin" = "manager"): Promise<{ imported: number }> {
+  const lines = csvData.trim().split("\n");
+  const headers = lines[0].split(",").map((h) => h.trim());
+  let imported = 0;
 
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(",").map((v) => v.trim());
+    if (values.length !== headers.length) continue;
+
+    const userData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      userData[header] = values[index];
+    });
+
+    // ожидаем в CSV столбцы: username, password, firstName, lastName, middleName, profileImage
+    if (!userData.username || !userData.password || !userData.firstName || !userData.lastName) {
+      continue;
+    }
+
+    try {
+      await this.createUser({
+        username: userData.username,
+        password: userData.password,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        middleName: userData.middleName || undefined,
+        profileImage: userData.profileImage || undefined,
+        role, // по умолчанию "manager", можно передать "admin"
+      });
+      imported++;
+    } catch (error) {
+      console.error("Error importing user:", error);
+    }
+  }
+
+  return { imported };
+}
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
     const [employee] = await db
       .insert(employees)
@@ -206,16 +242,21 @@ export class DatabaseStorage implements IStorage {
     return activityType;
   }
 
-  async initializeUsers(): Promise<void> {
-    const existingUsers = await db.select().from(users);
-    if (existingUsers.length === 0) {
-      await db.insert(users).values([
-        { username: "admin", password: "admin123", firstName: "Администратор", lastName: "Системы", role: "admin" },
-        { username: "pervakova", password: "password123", firstName: "Наталья", lastName: "Первакова", middleName: "Владимировна", role: "manager" },
-      ]);
-      console.log("Users initialized");
-    }
+async initializeUsers(): Promise<void> {
+  const existingUsers = await db.select().from(users);
+  if (existingUsers.length === 0) {
+    await db.insert(users).values([
+      {
+        username: "admin",
+        password: "admin123",
+        firstName: "Администратор",
+        lastName: "Системы",
+        role: "admin",
+      },
+    ]);
+    console.log("Users initialized");
   }
+}
 
   async initializeCities(): Promise<void> {
     const existingCities = await db.select().from(cities);
@@ -392,21 +433,25 @@ export class DatabaseStorage implements IStorage {
     return activity;
   }
 
-  async deleteActivity(id: string): Promise<void> {
-    await db.delete(activities).where(eq(activities.id, id));
-  }
+ async deleteActivity(id: string): Promise<void> {
+  await db.delete(activities).where(eq(activities.id, id));
+}
 
-  async updateActivityStatus(id: string, status: string): Promise<Activity> {
-    const [activity] = await db
-      .update(activities)
-      .set({
-        status,
-        updatedAt: new Date(),
-      })
-      .where(eq(activities.id, id))
-      .returning();
-    return activity;
-  }
+async deleteUser(id: string): Promise<void> {
+  await db.delete(users).where(eq(users.id, id));
+}
+
+async updateActivityStatus(id: string, status: string): Promise<Activity> {
+  const [activity] = await db
+    .update(activities)
+    .set({
+      status,
+      updatedAt: new Date(),
+    })
+    .where(eq(activities.id, id))
+    .returning();
+  return activity;
+}
 
   async getMessages(userId: string): Promise<MessageWithDetails[]> {
     const result = await db

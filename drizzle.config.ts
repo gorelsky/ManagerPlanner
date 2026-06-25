@@ -1,3 +1,4 @@
+console.log("DRIZZLE_DATABASE_URL in config:", process.env.DRIZZLE_DATABASE_URL);
 import { defineConfig } from "drizzle-kit";
 
 if (!process.env.DRIZZLE_DATABASE_URL) {

@@ -122,29 +122,19 @@ export default function Login() {
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading || !username || !password}
-                data-testid="button-login"
-              >
-                {isLoading ? "Вход..." : "Войти"}
-              </Button>
-            </form>
+<Button
+  type="submit"
+  className="w-full"
+  disabled={isLoading || !username || !password}
+  data-testid="button-login"
+>
+  {isLoading ? "Вход..." : "Войти"}
+</Button>
+</form>
 
-            {/* Demo Credentials */}
-            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                Тестовые учетные данные:
-              </h3>
-              <div className="space-y-1 text-xs text-blue-700 dark:text-blue-300">
-                <p><strong>Менеджер:</strong> pervakova / password123</p>
-                <p><strong>Админ:</strong> admin / admin123</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
+</CardContent>
+</Card>
+</div>
+</div>
+);
 }

@@ -82,7 +82,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
 
+      // Проверяем, что пользователь вообще есть
+      const existingUser = await storage.getUser(id);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Удаляем пользователя из своей базы (таблица users)
+      await storage.deleteUser(id);
+
+      // Если у тебя есть Supabase auth и нужно удалять из auth.users,
+      // здесь можно добавить вызов supabase.auth.admin.deleteUser(id)
+
+      res.status(204).end();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
   // Cities
   app.get("/api/cities", async (req, res) => {
     try {
@@ -137,7 +158,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+// Import managers (users) from CSV
+app.post("/api/users/import", async (req, res) => {
+  try {
+    const { csvData, role } = req.body;
+    if (!csvData || typeof csvData !== "string") {
+      return res.status(400).json({ message: "Invalid CSV data" });
+    }
 
+    const importRole = role === "admin" ? "admin" : "manager";
+    const result = await storage.importUsersFromCsv(csvData, importRole);
+    res.json(result);
+  } catch (error) {
+    console.error("[IMPORT USERS ERROR]", error);
+    res.status(500).json({ message: "Internal server error during users import" });
+  }
+});
   app.post("/api/employees", async (req, res) => {
     try {
       const employeeData = insertEmployeeSchema.parse(req.body);
@@ -267,14 +303,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/activities/:id", async (req, res) => {
-    try {
-      await storage.deleteActivity(req.params.id);
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+ app.delete("/api/users/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    await storage.deleteUser(id);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
   // Messages
   app.get("/api/messages/:userId", async (req, res) => {
