@@ -47,19 +47,27 @@ export default function CreateActivityModal({
       userId,
       description: "",
       status: "planned",
-      startDate: new Date(), // Сегодняшняя дата
-      endDate: new Date(),   // Сегодняшняя дата
-      startTime: "09:00", // Время по умолчанию
-      endTime: "18:00",   // Время по умолчанию
+      startDate: new Date(),
+      endDate: new Date(),
+      startTime: "09:00",
+      endTime: "18:00",
       typeId: "",
       cityId: "",
       employeeId: "",
     },
   });
 
+  // БЫЛО: все города
+  // const { data: cities = [] } = useQuery({
+  //   queryKey: ["/api/cities"],
+  //   queryFn: cityApi.getCities,
+  // });
+
+  // СТАЛО: только города зоны текущего менеджера
   const { data: cities = [] } = useQuery({
-    queryKey: ["/api/cities"],
-    queryFn: cityApi.getCities,
+    queryKey: ["/api/cities/manager", userId],
+    queryFn: () => cityApi.getCitiesByManager(userId),
+    enabled: !!userId,
   });
 
   const { data: activityTypes = [] } = useQuery({
@@ -70,6 +78,7 @@ export default function CreateActivityModal({
   const { data: employees = [] } = useQuery({
     queryKey: ["/api/employees/manager", userId],
     queryFn: () => employeeApi.getEmployeesByManager(userId),
+    enabled: !!userId,
   });
 
   const selectedTypeId = form.watch("typeId");
@@ -107,7 +116,6 @@ export default function CreateActivityModal({
   });
 
   const onSubmit = (data: FormData) => {
-    // Объединяем дату и время в один объект Date
     const [startHour, startMinute] = data.startTime.split(':').map(Number);
     const [endHour, endMinute] = data.endTime.split(':').map(Number);
     
@@ -117,7 +125,6 @@ export default function CreateActivityModal({
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
-    // Используем название типа активности как title
     const selectedType = activityTypes.find(type => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
 
@@ -145,6 +152,8 @@ export default function CreateActivityModal({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* тип активности, даты, время — без изменений */}
+
             <FormField
               control={form.control}
               name="typeId"
@@ -169,7 +178,6 @@ export default function CreateActivityModal({
                 </FormItem>
               )}
             />
-
 
             <FormField
               control={form.control}
@@ -239,6 +247,7 @@ export default function CreateActivityModal({
               )}
             />
 
+            {/* Город — теперь только из зоны менеджера */}
             <FormField
               control={form.control}
               name="cityId"

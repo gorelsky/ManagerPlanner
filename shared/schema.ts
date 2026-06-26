@@ -1,7 +1,17 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, numeric } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  timestamp,
+  boolean,
+  integer,
+  numeric,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+/* === Таблицы === */
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -12,13 +22,15 @@ export const users = pgTable("users", {
   middleName: text("middle_name"),
   profileImage: text("profile_image"),
   role: text("role").notNull().default("manager"), // manager, admin
+  // базовый город менеджера (опционально, можно использовать позже)
+  cityId: varchar("city_id").references(() => cities.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const cities = pgTable("cities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
-  region: text("region"), // новое поле, можно оставить nullable
+  region: text("region"), // можно оставить nullable
 });
 
 export const employees = pgTable("employees", {
@@ -38,7 +50,10 @@ export const activityTypes = pgTable("activity_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   requiresEmployee: boolean("requires_employee").default(false),
-  visitEquivalent: numeric("visit_equivalent", { precision: 3, scale: 1 }).notNull().default("1.0"),
+  visitEquivalent: numeric("visit_equivalent", {
+    precision: 3,
+    scale: 1,
+  }).notNull().default("1.0"),
 });
 
 export const activities = pgTable("activities", {
@@ -51,7 +66,9 @@ export const activities = pgTable("activities", {
   description: text("description"),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
-  status: text("status").notNull().default("planned"), // planned, in_progress, completed, cancelled, rescheduled
+  status: text("status")
+    .notNull()
+    .default("planned"), // planned, in_progress, completed, cancelled, rescheduled
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -65,16 +82,33 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Relations
-export const usersRelations = relations(users, ({ many }) => ({
+// новая таблица: города, закреплённые за менеджером
+export const managerCities = pgTable("manager_cities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  managerId: varchar("manager_id").notNull().references(() => users.id),
+  cityId: varchar("city_id").notNull().references(() => cities.id),
+});
+
+/* === Relations === */
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   activities: many(activities),
   employees: many(employees),
   sentMessages: many(messages, { relationName: "sender" }),
   receivedMessages: many(messages, { relationName: "receiver" }),
+  // базовый город пользователя (если используешь)
+  city: one(cities, {
+    fields: [users.cityId],
+    references: [cities.id],
+  }),
+  // города зоны менеджера
+  managerCities: many(managerCities),
 }));
 
 export const citiesRelations = relations(cities, ({ many }) => ({
   activities: many(activities),
+  employees: many(employees),
+  managerCities: many(managerCities),
 }));
 
 export const employeesRelations = relations(employees, ({ one, many }) => ({
@@ -123,7 +157,22 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
-// Insert schemas
+export const managerCitiesRelations = relations(
+  managerCities,
+  ({ one }) => ({
+    manager: one(users, {
+      fields: [managerCities.managerId],
+      references: [users.id],
+    }),
+    city: one(cities, {
+      fields: [managerCities.cityId],
+      references: [cities.id],
+    }),
+  })
+);
+
+/* === Insert schemas === */
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -152,7 +201,12 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   createdAt: true,
 });
 
-// Types
+export const insertManagerCitySchema = createInsertSchema(managerCities).omit({
+  id: true,
+});
+
+/* === Types === */
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
@@ -171,7 +225,11 @@ export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
-// Extended types with relations
+export type ManagerCity = typeof managerCities.$inferSelect;
+export type InsertManagerCity = z.infer<typeof insertManagerCitySchema>;
+
+/* === Extended types with relations === */
+
 export type ActivityWithDetails = Activity & {
   type: ActivityType;
   city: City;

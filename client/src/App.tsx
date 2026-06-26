@@ -47,10 +47,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <div className="max-w-sm mx-auto bg-background min-h-screen">
-            <Toaster />
-            <Router />
-          </div>
+          <div className="min-h-screen bg-background flex">
+  <div className="flex-1">
+    <Toaster />
+    <Router />
+  </div>
+</div>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

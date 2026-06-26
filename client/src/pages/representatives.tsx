@@ -84,7 +84,10 @@ export default function Representatives() {
                       </h3>
                       <p className="text-sm text-muted-foreground">
                         {rep.position || "Медицинский представитель"}
-                      </p>
+                        {rep.city?.region ? ` (${rep.city.region} регион)` : ""}
+                        {rep.city?.name && " • локация г. "}
+                        {rep.city?.name}
+                     </p>
                     </div>
                     <Badge variant="secondary" className="text-xs">
                       МП

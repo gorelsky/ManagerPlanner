@@ -49,7 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users
-  app.get("/api/users/managers", async (req, res) => {
+  app.get("/api/users/managers", async (_req, res) => {
     try {
       const managers = await storage.getManagersList();
       res.json(managers);
@@ -87,17 +87,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = req.params.id;
 
-      // Проверяем, что пользователь вообще есть
       const existingUser = await storage.getUser(id);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Удаляем пользователя из своей базы (таблица users)
       await storage.deleteUser(id);
-
-      // Если есть внешняя auth-система, можно добавить удаление там
-
       res.status(204).end();
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -106,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Cities
-  app.get("/api/cities", async (req, res) => {
+  app.get("/api/cities", async (_req, res) => {
     try {
       const cities = await storage.getCities();
       res.json(cities);
@@ -145,8 +140,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // НОВОЕ: города зоны менеджера
+  app.get("/api/cities/manager/:managerId", async (req, res) => {
+    try {
+      const cities = await storage.getCitiesByManager(req.params.managerId);
+      res.json(cities);
+    } catch (error) {
+      console.error("Error fetching manager cities:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // НОВОЕ: импорт зон менеджеров из CSV (managerEmail,city)
+  app.post("/api/manager-cities/import", async (req, res) => {
+    try {
+      const { csvData } = req.body as { csvData?: string };
+
+      if (!csvData || typeof csvData !== "string") {
+        return res.status(400).json({ message: "Invalid CSV data" });
+      }
+
+      const result = await storage.importManagerCitiesFromCsv(csvData);
+      res.json(result);
+    } catch (error) {
+      console.error("[IMPORT MANAGER CITIES ERROR]", error);
+      res.status(500).json({ message: "Internal server error during manager cities import" });
+    }
+  });
+
   // Employees
-  app.get("/api/employees/all", async (req, res) => {
+  app.get("/api/employees/all", async (_req, res) => {
     try {
       const employees = await storage.getAllEmployees();
       res.json(employees);
@@ -208,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Activity Types
-  app.get("/api/activity-types", async (req, res) => {
+  app.get("/api/activity-types", async (_req, res) => {
     try {
       const activityTypes = await storage.getActivityTypes();
       res.json(activityTypes);
@@ -271,12 +294,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/activities", async (req, res) => {
     try {
-      // Преобразуем строки дат в Date объекты
       const body = req.body;
       if (body.startDate) body.startDate = new Date(body.startDate);
       if (body.endDate) body.endDate = new Date(body.endDate);
       
-      // Проверка: запрет добавления активностей задним числом
       const now = new Date();
       now.setHours(0, 0, 0, 0);
       const startDate = new Date(body.startDate);
@@ -319,20 +340,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid status data", errors: error.errors });
       }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // Дублирующий delete /api/users/:id у тебя уже выше — этот блок можно удалить,
-  // но я оставил как есть, чтобы не ломать логику, которую ты можешь использовать где-то ещё.
-
-  app.delete("/api/users/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      await storage.deleteUser(id);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting user:", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });

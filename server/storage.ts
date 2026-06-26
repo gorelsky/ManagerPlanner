@@ -1,5 +1,6 @@
 import { 
   users, cities, employees, activityTypes, activities, messages,
+  managerCities, // ДОБАВЛЕНО
   type User, type InsertUser,
   type City, type InsertCity,
   type Employee, type InsertEmployee, type EmployeeWithDetails,
@@ -20,7 +21,11 @@ export interface IStorage {
   // Cities
   getCities(): Promise<City[]>;
   createCity(city: InsertCity): Promise<City>;
-  importCities(csvData: string): Promise<{ imported: number }>; // NEW
+  importCities(csvData: string): Promise<{ imported: number }>;
+
+  // НОВОЕ: города зоны менеджера
+  getCitiesByManager(managerId: string): Promise<City[]>;
+  importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }>;
 
   // Employees
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
@@ -51,6 +56,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  /* === Users === */
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user || undefined;
@@ -69,6 +76,8 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  /* === Cities === */
+
   async getCities(): Promise<City[]> {
     return await db.select().from(cities).orderBy(asc(cities.name));
   }
@@ -81,7 +90,7 @@ export class DatabaseStorage implements IStorage {
     return city;
   }
 
-  // NEW: импорт городов из CSV (name,region?)
+  // импорт городов из CSV (name,region?)
   async importCities(csvData: string): Promise<{ imported: number }> {
     const lines = csvData.trim().split("\n");
     if (lines.length < 2) {
@@ -91,7 +100,6 @@ export class DatabaseStorage implements IStorage {
     const headers = lines[0].split(",").map((h) => h.trim());
     let imported = 0;
 
-    // допустимая схема: name,region
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(",").map((v) => v.trim());
       if (values.length !== headers.length) continue;
@@ -116,6 +124,84 @@ export class DatabaseStorage implements IStorage {
 
     return { imported };
   }
+
+  /* === НОВОЕ: города зоны менеджера === */
+
+  async getCitiesByManager(managerId: string): Promise<City[]> {
+    const rows = await db
+      .select({ city: cities })
+      .from(managerCities)
+      .innerJoin(cities, eq(managerCities.cityId, cities.id))
+      .where(eq(managerCities.managerId, managerId))
+      .orderBy(asc(cities.name));
+
+    return rows.map((row) => row.city);
+  }
+
+  // CSV: managerEmail,city
+  async importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }> {
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      return { imported: 0 };
+    }
+
+    const headers = lines[0].split(",").map((h) => h.trim());
+    let imported = 0;
+
+    const allManagers = await db
+      .select()
+      .from(users)
+      .where(eq(users.role, "manager"));
+
+    const allCities = await db.select().from(cities);
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(",").map((v) => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const row: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index];
+      });
+
+      const managerEmail = row.managerEmail || row.manager || row.username;
+      const cityName = row.city;
+
+      if (!managerEmail || !cityName) {
+        console.warn(`Invalid row ${i}: managerEmail or city is empty`);
+        continue;
+      }
+
+      const manager = allManagers.find((m) => m.username === managerEmail);
+      if (!manager) {
+        console.warn(`Manager not found for row ${i}: ${managerEmail}`);
+        continue;
+      }
+
+      const city = allCities.find((c) => c.name === cityName);
+      if (!city) {
+        console.warn(`City not found for row ${i}: ${cityName}`);
+        continue;
+      }
+
+      try {
+        await db.insert(managerCities).values({
+          managerId: manager.id,
+          cityId: city.id,
+        });
+        imported++;
+      } catch (error) {
+        console.error("Error importing manager city:", error);
+      }
+    }
+
+    return { imported };
+  }
+
+  /* === Managers / Employees === */
 
   async getManagersList(): Promise<User[]> {
     return await db
@@ -183,75 +269,42 @@ export class DatabaseStorage implements IStorage {
   }
 
   async importEmployees(csvData: string): Promise<{ imported: number }> {
-    const lines = csvData.trim().split("\n");
-    if (lines.length < 2) {
-      return { imported: 0 };
-    }
-
-    const headers = lines[0].split(",").map(h => h.trim());
+    const lines = csvData.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
     let imported = 0;
 
-    // Один раз заберём все города и менеджеров для поиска по имени/логину
     const allCities = await this.getCities();
     const allManagers = await this.getManagersList();
 
     for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const values = line.split(",").map(v => v.trim());
+      const values = lines[i].split(',').map(v => v.trim());
       if (values.length !== headers.length) continue;
 
-      const row: Record<string, string> = {};
+      const employeeData: Record<string, string> = {};
       headers.forEach((header, index) => {
-        row[header] = values[index];
+        employeeData[header] = values[index];
       });
 
-      const {
-        firstName,
-        lastName,
-        middleName,
-        phone,
-        email,
-        city,
-        manager,
-        profileImage,
-      } = row;
+      const city = allCities.find(c => c.name === employeeData.city);
+      const manager = allManagers.find(m => m.username === employeeData.manager);
 
-      // обязательные поля для нас
-      if (!firstName || !lastName || !city || !manager) {
-        continue;
-      }
-
-      // город по имени
-      const cityRow = allCities.find(c => c.name === city);
-      if (!cityRow) {
-        console.warn(`City not found for row ${i}: ${city}`);
-        continue;
-      }
-
-      // менеджер по username (у тебя username = email)
-      const managerRow = allManagers.find(m => m.username === manager);
-      if (!managerRow) {
-        console.warn(`Manager not found for row ${i}: ${manager}`);
-        continue;
-      }
+      if (!city || !manager) continue;
 
       try {
         await this.createEmployee({
-          firstName,
-          lastName,
-          middleName: middleName || undefined,
-          phone: phone || undefined,
-          email: email || undefined,
-          profileImage: profileImage || undefined,
-          cityId: cityRow.id,
-          managerId: managerRow.id,
-          position: "Медицинский представитель",
+          firstName: employeeData.firstName,
+          lastName: employeeData.lastName,
+          middleName: employeeData.middleName || undefined,
+          managerId: manager.id,
+          cityId: city.id,
+          profileImage: employeeData.profileImage || undefined,
+          position: employeeData.position || "Медицинский представитель",
+          phone: employeeData.phone || undefined,
+          email: employeeData.email || undefined,
         });
         imported++;
       } catch (error) {
-        console.error("Error importing employee:", error);
+        console.error('Error importing employee:', error);
       }
     }
 
@@ -272,7 +325,6 @@ export class DatabaseStorage implements IStorage {
         userData[header] = values[index];
       });
 
-      // ожидаем в CSV столбцы: username, password, firstName, lastName, middleName, profileImage
       if (!userData.username || !userData.password || !userData.firstName || !userData.lastName) {
         continue;
       }
@@ -285,7 +337,7 @@ export class DatabaseStorage implements IStorage {
           lastName: userData.lastName,
           middleName: userData.middleName || undefined,
           profileImage: userData.profileImage || undefined,
-          role, // по умолчанию "manager", можно передать "admin"
+          role,
         });
         imported++;
       } catch (error) {
@@ -303,6 +355,8 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return employee;
   }
+
+  /* === Activity types === */
 
   async getActivityTypes(): Promise<ActivityType[]> {
     return await db.select().from(activityTypes).orderBy(asc(activityTypes.name));
@@ -332,19 +386,19 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-async initializeCities(): Promise<void> {
-  const existingCities = await db.select().from(cities);
-  if (existingCities.length === 0) {
-    await db.insert(cities).values([
-      { name: "Москва", region: "Центральный" },
-      { name: "Санкт-Петербург", region: "Северо-Западный" },
-      { name: "Новосибирск", region: "Сибирский" },
-      { name: "Екатеринбург", region: "Волжский" },
-      { name: "Казань", region: "Волжский" },
-    ]);
-    console.log("Cities initialized");
+  async initializeCities(): Promise<void> {
+    const existingCities = await db.select().from(cities);
+    if (existingCities.length === 0) {
+      await db.insert(cities).values([
+        { name: "Москва", region: "Центральный" },
+        { name: "Санкт-Петербург", region: "Северо-Западный" },
+        { name: "Новосибирск", region: "Сибирский" },
+        { name: "Екатеринбург", region: "Волжский" },
+        { name: "Казань", region: "Волжский" },
+      ]);
+      console.log("Cities initialized");
+    }
   }
-}
 
   async initializeActivityTypes(): Promise<void> {
     const existingTypes = await this.getActivityTypes();
@@ -393,6 +447,8 @@ async initializeCities(): Promise<void> {
 
     console.log(`Activity types initialized. Total: ${defaultActivityTypes.length}`);
   }
+
+  /* === Activities === */
 
   async getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [eq(activities.userId, userId)];
@@ -524,6 +580,8 @@ async initializeCities(): Promise<void> {
       .returning();
     return activity;
   }
+
+  /* === Messages === */
 
   async getMessages(userId: string): Promise<MessageWithDetails[]> {
     const result = await db

@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import logo from "@/assets/logo.jpg";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -33,7 +34,7 @@ export default function Login() {
         login(user);
         toast({
           title: "Вход выполнен успешно",
-          description: `Добро пожаловать, ${user.firstName} ${user.lastName}!`,
+          description: `Добро пожаловать, ${user.firstName} ${user.middleName} ${user.lastName}!`,
         });
       } else {
         const error = await response.json();
@@ -55,15 +56,19 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-200 dark:bg-gray-900 p-4">
+      <div className="w-full max-w-4xl mx-auto">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-            <LogIn className="w-8 h-8 text-white" />
+          <div className="mx-auto w-24 h-24 mb-4 flex items-center justify-center">
+            <img
+              src={logo}
+              alt="Логотип"
+              className="max-w-full max-h-full object-contain"
+            />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Activity Manager
+            Планировщик для ТМ
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Система управления активностями
@@ -73,7 +78,9 @@ export default function Login() {
         {/* Login Form */}
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Вход в систему</CardTitle>
+            <CardTitle className="text-2xl text-center">
+              Вход в систему
+            </CardTitle>
             <p className="text-sm text-muted-foreground text-center">
               Введите ваши учетные данные для входа
             </p>
@@ -92,7 +99,7 @@ export default function Login() {
                   data-testid="input-username"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Пароль</Label>
                 <div className="relative">
@@ -122,19 +129,18 @@ export default function Login() {
                 </div>
               </div>
 
-<Button
-  type="submit"
-  className="w-full"
-  disabled={isLoading || !username || !password}
-  data-testid="button-login"
->
-  {isLoading ? "Вход..." : "Войти"}
-</Button>
-</form>
-
-</CardContent>
-</Card>
-</div>
-</div>
-);
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading || !username || !password}
+                data-testid="button-login"
+              >
+                {isLoading ? "Вход..." : "Войти"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }

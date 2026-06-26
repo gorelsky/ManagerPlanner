@@ -37,6 +37,10 @@ export const cityApi = {
 
   importCities: (csvData: string): Promise<{ imported: number }> =>
     apiRequest("POST", "/api/cities/import", { csvData }).then(res => res.json()),
+
+  // НОВОЕ: города зоны конкретного менеджера
+  getCitiesByManager: (managerId: string): Promise<City[]> =>
+    apiRequest("GET", `/api/cities/manager/${managerId}`).then(res => res.json()),
 };
 
 // Employees

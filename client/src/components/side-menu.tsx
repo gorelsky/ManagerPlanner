@@ -31,7 +31,7 @@ export default function SideMenu() {
               </div>
               <div>
                 <p className="text-sm font-medium">
-                  {user.firstName} {user.lastName}
+                  {user.firstName} {user.middleName} {user.lastName}
                 </p>
                 <p className="text-xs text-white/70">
                   {user.role === "admin" ? "Администратор" : "Менеджер"}
