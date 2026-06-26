@@ -34,6 +34,9 @@ export const cityApi = {
   
   createCity: (city: InsertCity): Promise<City> =>
     apiRequest("POST", "/api/cities", city).then(res => res.json()),
+
+  importCities: (csvData: string): Promise<{ imported: number }> =>
+    apiRequest("POST", "/api/cities/import", { csvData }).then(res => res.json()),
 };
 
 // Employees

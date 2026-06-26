@@ -18,6 +18,7 @@ export const users = pgTable("users", {
 export const cities = pgTable("cities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
+  region: text("region"), // новое поле, можно оставить nullable
 });
 
 export const employees = pgTable("employees", {

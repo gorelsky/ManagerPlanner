@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
-import { employeeApi, userApi, activityApi } from "@/lib/api";
+import { employeeApi, userApi, activityApi, cityApi } from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 
 export default function Admin() {
@@ -23,6 +23,10 @@ export default function Admin() {
   const [managerFile, setManagerFile] = useState<File | null>(null);
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
   const [isImportingManagers, setIsImportingManagers] = useState(false);
+
+  // NEW: состояние для импорта городов
+  const [citiesCsv, setCitiesCsv] = useState("");
+  const [isImportingCities, setIsImportingCities] = useState(false);
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -119,26 +123,48 @@ export default function Admin() {
     },
   });
 
-const deleteActivityMutation = useMutation({
-  mutationFn: (id: string) => activityApi.deleteActivity(id),
-  onSuccess: (_data, deletedId) => {
-    queryClient.setQueryData(
-      ["/api/activities/all"],
-      (old: ActivityWithDetails[] | undefined) =>
-        (old ?? []).filter((activity) => activity.id !== deletedId)
-    );
-    toast({
-      title: "Активность удалена",
-    });
-  },
-  onError: (error: any) => {
-    toast({
-      title: "Ошибка удаления активности",
-      description: error.message || "Не удалось удалить активность",
-      variant: "destructive",
-    });
-  },
-});
+  const deleteActivityMutation = useMutation({
+    mutationFn: (id: string) => activityApi.deleteActivity(id),
+    onSuccess: (_data, deletedId) => {
+      queryClient.setQueryData(
+        ["/api/activities/all"],
+        (old: ActivityWithDetails[] | undefined) =>
+          (old ?? []).filter((activity) => activity.id !== deletedId)
+      );
+      toast({
+        title: "Активность удалена",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка удаления активности",
+        description: error.message || "Не удалось удалить активность",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // NEW: мутация для импорта городов
+  const importCitiesMutation = useMutation({
+    mutationFn: (data: string) => cityApi.importCities(data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cities"] });
+      toast({
+        title: "Импорт городов завершен",
+        description: `Импортировано городов: ${result.imported}`,
+      });
+      setCitiesCsv("");
+      setIsImportingCities(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка импорта городов",
+        description: error.message || "Не удалось импортировать города",
+        variant: "destructive",
+      });
+      setIsImportingCities(false);
+    },
+  });
 
   const handleImport = () => {
     if (!csvData.trim()) {
@@ -178,8 +204,21 @@ const deleteActivityMutation = useMutation({
     }
   };
 
+  // NEW: обработчик импорта городов
+  const handleImportCities = () => {
+    if (!citiesCsv.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Введите CSV с городами",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportingCities(true);
+    importCitiesMutation.mutate(citiesCsv);
+  };
+
   const downloadTemplate = () => {
-    // Чистый шаблон без тестовых данных
     const template =
       "firstName,lastName,middleName,phone,email,city,manager,profileImage";
     const blob = new Blob([template], { type: "text/csv" });
@@ -278,6 +317,41 @@ const deleteActivityMutation = useMutation({
               data-testid="button-import"
             >
               {isImporting ? "Импортирую..." : "Импортировать МП"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* NEW: Import Cities Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="w-5 h-5" />
+              <span>Массовая загрузка городов</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="cities-csv">
+                CSV города (колонки: name,region)
+              </Label>
+              <Textarea
+                id="cities-csv"
+                placeholder={`name,region\nМосква,Центральный\nСанкт-Петербург,СЗФО`}
+                value={citiesCsv}
+                onChange={(e) => setCitiesCsv(e.target.value)}
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+
+            <Button
+              onClick={handleImportCities}
+              disabled={isImportingCities || !citiesCsv.trim()}
+              className="w-full"
+            >
+              {isImportingCities
+                ? "Импортирую города..."
+                : "Импортировать города"}
             </Button>
           </CardContent>
         </Card>
@@ -423,8 +497,9 @@ const deleteActivityMutation = useMutation({
                           {employee.middleName}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {employee.city?.name} • {employee.manager?.lastName}{" "}
-                          {employee.manager?.firstName}
+                          {employee.city?.name}
+                          {employee.city?.region ? ` (${employee.city.region})` : ""} •{" "}
+                          {employee.manager?.lastName} {employee.manager?.firstName}
                         </p>
                       </div>
                     </div>

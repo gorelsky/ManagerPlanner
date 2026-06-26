@@ -20,6 +20,7 @@ export interface IStorage {
   // Cities
   getCities(): Promise<City[]>;
   createCity(city: InsertCity): Promise<City>;
+  importCities(csvData: string): Promise<{ imported: number }>; // NEW
 
   // Employees
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
@@ -80,8 +81,48 @@ export class DatabaseStorage implements IStorage {
     return city;
   }
 
+  // NEW: импорт городов из CSV (name,region?)
+  async importCities(csvData: string): Promise<{ imported: number }> {
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      return { imported: 0 };
+    }
+
+    const headers = lines[0].split(",").map((h) => h.trim());
+    let imported = 0;
+
+    // допустимая схема: name,region
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(",").map((v) => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const cityData: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        cityData[header] = values[index];
+      });
+
+      const name = cityData.name;
+      if (!name) continue;
+
+      const region = cityData.region || undefined;
+
+      try {
+        await this.createCity({ name, region } as InsertCity);
+        imported++;
+      } catch (error) {
+        console.error("Error importing city:", error);
+      }
+    }
+
+    return { imported };
+  }
+
   async getManagersList(): Promise<User[]> {
-    return await db.select().from(users).where(eq(users.role, "manager")).orderBy(asc(users.lastName));
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.role, "manager"))
+      .orderBy(asc(users.lastName));
   }
 
   async getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]> {
@@ -142,86 +183,119 @@ export class DatabaseStorage implements IStorage {
   }
 
   async importEmployees(csvData: string): Promise<{ imported: number }> {
-    const lines = csvData.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      return { imported: 0 };
+    }
+
+    const headers = lines[0].split(",").map(h => h.trim());
     let imported = 0;
 
-    // Получить все города и менеджеров для поиска по именам
+    // Один раз заберём все города и менеджеров для поиска по имени/логину
     const allCities = await this.getCities();
     const allManagers = await this.getManagersList();
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(",").map(v => v.trim());
       if (values.length !== headers.length) continue;
 
-      const employeeData: Record<string, string> = {};
+      const row: Record<string, string> = {};
       headers.forEach((header, index) => {
-        employeeData[header] = values[index];
+        row[header] = values[index];
       });
 
-      // Найти ID города и менеджера
-      const city = allCities.find(c => c.name === employeeData.city);
-      const manager = allManagers.find(m => m.username === employeeData.manager);
+      const {
+        firstName,
+        lastName,
+        middleName,
+        phone,
+        email,
+        city,
+        manager,
+        profileImage,
+      } = row;
 
-      if (!city || !manager) continue;
+      // обязательные поля для нас
+      if (!firstName || !lastName || !city || !manager) {
+        continue;
+      }
+
+      // город по имени
+      const cityRow = allCities.find(c => c.name === city);
+      if (!cityRow) {
+        console.warn(`City not found for row ${i}: ${city}`);
+        continue;
+      }
+
+      // менеджер по username (у тебя username = email)
+      const managerRow = allManagers.find(m => m.username === manager);
+      if (!managerRow) {
+        console.warn(`Manager not found for row ${i}: ${manager}`);
+        continue;
+      }
 
       try {
         await this.createEmployee({
-          firstName: employeeData.firstName,
-          lastName: employeeData.lastName,
-          middleName: employeeData.middleName || undefined,
-          managerId: manager.id,
-          cityId: city.id,
-          profileImage: employeeData.profileImage || undefined,
-          position: employeeData.position || "Медицинский представитель",
-          phone: employeeData.phone || undefined,
-          email: employeeData.email || undefined,
+          firstName,
+          lastName,
+          middleName: middleName || undefined,
+          phone: phone || undefined,
+          email: email || undefined,
+          profileImage: profileImage || undefined,
+          cityId: cityRow.id,
+          managerId: managerRow.id,
+          position: "Медицинский представитель",
         });
         imported++;
       } catch (error) {
-        console.error('Error importing employee:', error);
+        console.error("Error importing employee:", error);
       }
     }
 
     return { imported };
   }
-async importUsersFromCsv(csvData: string, role: "manager" | "admin" = "manager"): Promise<{ imported: number }> {
-  const lines = csvData.trim().split("\n");
-  const headers = lines[0].split(",").map((h) => h.trim());
-  let imported = 0;
 
-  for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(",").map((v) => v.trim());
-    if (values.length !== headers.length) continue;
+  async importUsersFromCsv(csvData: string, role: "manager" | "admin" = "manager"): Promise<{ imported: number }> {
+    const lines = csvData.trim().split("\n");
+    const headers = lines[0].split(",").map((h) => h.trim());
+    let imported = 0;
 
-    const userData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      userData[header] = values[index];
-    });
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(",").map((v) => v.trim());
+      if (values.length !== headers.length) continue;
 
-    // ожидаем в CSV столбцы: username, password, firstName, lastName, middleName, profileImage
-    if (!userData.username || !userData.password || !userData.firstName || !userData.lastName) {
-      continue;
-    }
-
-    try {
-      await this.createUser({
-        username: userData.username,
-        password: userData.password,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        middleName: userData.middleName || undefined,
-        profileImage: userData.profileImage || undefined,
-        role, // по умолчанию "manager", можно передать "admin"
+      const userData: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        userData[header] = values[index];
       });
-      imported++;
-    } catch (error) {
-      console.error("Error importing user:", error);
+
+      // ожидаем в CSV столбцы: username, password, firstName, lastName, middleName, profileImage
+      if (!userData.username || !userData.password || !userData.firstName || !userData.lastName) {
+        continue;
+      }
+
+      try {
+        await this.createUser({
+          username: userData.username,
+          password: userData.password,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          middleName: userData.middleName || undefined,
+          profileImage: userData.profileImage || undefined,
+          role, // по умолчанию "manager", можно передать "admin"
+        });
+        imported++;
+      } catch (error) {
+        console.error("Error importing user:", error);
+      }
     }
+
+    return { imported };
   }
 
-  return { imported };
-}
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
     const [employee] = await db
       .insert(employees)
@@ -242,40 +316,39 @@ async importUsersFromCsv(csvData: string, role: "manager" | "admin" = "manager")
     return activityType;
   }
 
-async initializeUsers(): Promise<void> {
-  const existingUsers = await db.select().from(users);
-  if (existingUsers.length === 0) {
-    await db.insert(users).values([
-      {
-        username: "admin",
-        password: "admin123",
-        firstName: "Администратор",
-        lastName: "Системы",
-        role: "admin",
-      },
-    ]);
-    console.log("Users initialized");
-  }
-}
-
-  async initializeCities(): Promise<void> {
-    const existingCities = await db.select().from(cities);
-    if (existingCities.length === 0) {
-      await db.insert(cities).values([
-        { name: "Москва" },
-        { name: "Санкт-Петербург" },
-        { name: "Новосибирск" },
-        { name: "Екатеринбург" },
-        { name: "Казань" },
+  async initializeUsers(): Promise<void> {
+    const existingUsers = await db.select().from(users);
+    if (existingUsers.length === 0) {
+      await db.insert(users).values([
+        {
+          username: "admin",
+          password: "admin123",
+          firstName: "Администратор",
+          lastName: "Системы",
+          role: "admin",
+        },
       ]);
-      console.log("Cities initialized");
+      console.log("Users initialized");
     }
   }
+
+async initializeCities(): Promise<void> {
+  const existingCities = await db.select().from(cities);
+  if (existingCities.length === 0) {
+    await db.insert(cities).values([
+      { name: "Москва", region: "Центральный" },
+      { name: "Санкт-Петербург", region: "Северо-Западный" },
+      { name: "Новосибирск", region: "Сибирский" },
+      { name: "Екатеринбург", region: "Волжский" },
+      { name: "Казань", region: "Волжский" },
+    ]);
+    console.log("Cities initialized");
+  }
+}
 
   async initializeActivityTypes(): Promise<void> {
     const existingTypes = await this.getActivityTypes();
     
-    // Список всех типов активностей с ВЭ значениями
     const defaultActivityTypes = [
       { name: "Административная работа (проверка фин отчетов, собственная фин отчетность, работа с аналитикой и т.д.)", visitEquivalent: "2.0", requiresEmployee: false },
       { name: "Аудит визит", visitEquivalent: "1.5", requiresEmployee: true },
@@ -307,12 +380,11 @@ async initializeUsers(): Promise<void> {
       { name: "ФУВ", visitEquivalent: "4.0", requiresEmployee: false },
     ];
 
-    // Создаем только те типы, которых еще нет
     for (const activityType of defaultActivityTypes) {
       const exists = existingTypes.find(existing => existing.name === activityType.name);
       if (!exists) {
         try {
-          await this.createActivityType(activityType);
+          await this.createActivityType(activityType as any);
         } catch (error) {
           console.error(`Error creating activity type "${activityType.name}":`, error);
         }
@@ -371,7 +443,7 @@ async initializeUsers(): Promise<void> {
       type: row.type!,
       city: row.city!,
       employee: row.employee || undefined,
-      managerName: `${row.managerFirstName || ''} ${row.managerLastName || ''}`.trim() || row.managerUsername || '',
+      managerName: `${row.managerFirstName || ""} ${row.managerLastName || ""}`.trim() || row.managerUsername || "",
     }));
   }
 
@@ -433,25 +505,25 @@ async initializeUsers(): Promise<void> {
     return activity;
   }
 
- async deleteActivity(id: string): Promise<void> {
-  await db.delete(activities).where(eq(activities.id, id));
-}
+  async deleteActivity(id: string): Promise<void> {
+    await db.delete(activities).where(eq(activities.id, id));
+  }
 
-async deleteUser(id: string): Promise<void> {
-  await db.delete(users).where(eq(users.id, id));
-}
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
 
-async updateActivityStatus(id: string, status: string): Promise<Activity> {
-  const [activity] = await db
-    .update(activities)
-    .set({
-      status,
-      updatedAt: new Date(),
-    })
-    .where(eq(activities.id, id))
-    .returning();
-  return activity;
-}
+  async updateActivityStatus(id: string, status: string): Promise<Activity> {
+    const [activity] = await db
+      .update(activities)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, id))
+      .returning();
+    return activity;
+  }
 
   async getMessages(userId: string): Promise<MessageWithDetails[]> {
     const result = await db
@@ -478,17 +550,13 @@ async updateActivityStatus(id: string, status: string): Promise<Activity> {
       .innerJoin(users, eq(messages.senderId, users.id))
       .where(
         or(
-          // Сообщения где пользователь является отправителем
           eq(messages.senderId, userId),
-          // Сообщения где пользователь является получателем
           eq(messages.receiverId, userId),
-          // Общие сообщения (receiverId = null)
           isNull(messages.receiverId)
         )
       )
       .orderBy(desc(messages.createdAt));
 
-    // Получаем информацию о получателях для сообщений
     const messagesWithDetails: MessageWithDetails[] = [];
     
     for (const row of result) {

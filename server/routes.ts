@@ -82,6 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
   app.delete("/api/users/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -95,8 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Удаляем пользователя из своей базы (таблица users)
       await storage.deleteUser(id);
 
-      // Если у тебя есть Supabase auth и нужно удалять из auth.users,
-      // здесь можно добавить вызов supabase.auth.admin.deleteUser(id)
+      // Если есть внешняя auth-система, можно добавить удаление там
 
       res.status(204).end();
     } catch (error) {
@@ -104,6 +104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
+
   // Cities
   app.get("/api/cities", async (req, res) => {
     try {
@@ -124,6 +125,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid city data", errors: error.errors });
       }
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // NEW: import cities from CSV
+  app.post("/api/cities/import", async (req, res) => {
+    try {
+      const { csvData } = req.body as { csvData?: string };
+
+      if (!csvData || typeof csvData !== "string") {
+        return res.status(400).json({ message: "Invalid CSV data" });
+      }
+
+      const result = await storage.importCities(csvData);
+      res.json(result);
+    } catch (error) {
+      console.error("[IMPORT CITIES ERROR]", error);
+      res.status(500).json({ message: "Internal server error during cities import" });
     }
   });
 
@@ -149,7 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/employees/import", async (req, res) => {
     try {
       const { csvData } = req.body;
-      if (!csvData || typeof csvData !== 'string') {
+      if (!csvData || typeof csvData !== "string") {
         return res.status(400).json({ message: "Invalid CSV data" });
       }
       const result = await storage.importEmployees(csvData);
@@ -158,22 +176,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Internal server error" });
     }
   });
-// Import managers (users) from CSV
-app.post("/api/users/import", async (req, res) => {
-  try {
-    const { csvData, role } = req.body;
-    if (!csvData || typeof csvData !== "string") {
-      return res.status(400).json({ message: "Invalid CSV data" });
-    }
 
-    const importRole = role === "admin" ? "admin" : "manager";
-    const result = await storage.importUsersFromCsv(csvData, importRole);
-    res.json(result);
-  } catch (error) {
-    console.error("[IMPORT USERS ERROR]", error);
-    res.status(500).json({ message: "Internal server error during users import" });
-  }
-});
+  // Import managers (users) from CSV
+  app.post("/api/users/import", async (req, res) => {
+    try {
+      const { csvData, role } = req.body;
+      if (!csvData || typeof csvData !== "string") {
+        return res.status(400).json({ message: "Invalid CSV data" });
+      }
+
+      const importRole = role === "admin" ? "admin" : "manager";
+      const result = await storage.importUsersFromCsv(csvData, importRole);
+      res.json(result);
+    } catch (error) {
+      console.error("[IMPORT USERS ERROR]", error);
+      res.status(500).json({ message: "Internal server error during users import" });
+    }
+  });
+
   app.post("/api/employees", async (req, res) => {
     try {
       const employeeData = insertEmployeeSchema.parse(req.body);
@@ -303,16 +323,19 @@ app.post("/api/users/import", async (req, res) => {
     }
   });
 
- app.delete("/api/users/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-    await storage.deleteUser(id);
-    res.status(204).send();
-  } catch (error) {
-    console.error("Error deleting user:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
+  // Дублирующий delete /api/users/:id у тебя уже выше — этот блок можно удалить,
+  // но я оставил как есть, чтобы не ломать логику, которую ты можешь использовать где-то ещё.
+
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      await storage.deleteUser(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
 
   // Messages
   app.get("/api/messages/:userId", async (req, res) => {
