@@ -1,6 +1,6 @@
 import { 
   users, cities, employees, activityTypes, activities, messages,
-  managerCities, // ДОБАВЛЕНО
+  managerCities,
   type User, type InsertUser,
   type City, type InsertCity,
   type Employee, type InsertEmployee, type EmployeeWithDetails,
@@ -9,7 +9,8 @@ import {
   type Message, type InsertMessage, type MessageWithDetails
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, desc, asc, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 export interface IStorage {
   // Users
@@ -48,6 +49,20 @@ export interface IStorage {
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;
   updateActivityStatus(id: string, status: string): Promise<Activity>;
+  getActivityCalendarStatsByUser(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<
+    Array<{
+      date: string;
+      planned: number;
+      inProgress: number;
+      completed: number;
+      cancelled: number;
+      rescheduled: number;
+    }>
+  >;
 
   // Messages
   getMessages(userId: string): Promise<MessageWithDetails[]>;
@@ -456,13 +471,71 @@ export class DatabaseStorage implements IStorage {
     if (endDate) conditions.push(lte(activities.endDate, endDate));
     return this.queryActivities(conditions);
   }
-
+  
   async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [];
     if (startDate) conditions.push(gte(activities.startDate, startDate));
     if (endDate) conditions.push(lte(activities.endDate, endDate));
     return this.queryActivities(conditions);
   }
+
+// Календарная статистика активностей по дням для конкретного пользователя
+async getActivityCalendarStatsByUser(
+  userId: string,
+  startDate: Date,
+  endDate: Date,
+): Promise<
+  Array<{
+    date: string;
+    planned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    rescheduled: number;
+  }>
+> {
+  const rows = await db
+    .select({
+      // date_trunc('day', start_date) — более надёжно, чем date()
+      date: sql`date_trunc('day', ${activities.startDate})`.as("date"),
+      planned: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'planned')`.as("planned"),
+      inProgress: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'in_progress')`.as("in_progress"),
+      completed: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'completed')`.as("completed"),
+      cancelled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'cancelled')`.as("cancelled"),
+      rescheduled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'rescheduled')`.as("rescheduled"),
+    })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.userId, userId),
+        gte(activities.startDate, startDate),
+        lte(activities.startDate, endDate),
+      ),
+    )
+    .groupBy(sql`date_trunc('day', ${activities.startDate})`)
+    .orderBy(sql`date_trunc('day', ${activities.startDate})`);
+
+  return rows.map((r: any) => {
+    const rawDate = r.date;
+
+    // Drizzle может вернуть Date или строку, страхуемся
+    let dateStr: string;
+    if (rawDate instanceof Date) {
+      dateStr = rawDate.toISOString().slice(0, 10); // "2026-06-29"
+    } else {
+      dateStr = String(rawDate).slice(0, 10); // "2026-06-29" из "2026-06-29T00:00:00.000Z" или "2026-06-29"
+    }
+
+    return {
+      date: dateStr,
+      planned: Number(r.planned ?? 0),
+      inProgress: Number(r.inProgress ?? 0),
+      completed: Number(r.completed ?? 0),
+      cancelled: Number(r.cancelled ?? 0),
+      rescheduled: Number(r.rescheduled ?? 0),
+    };
+  });
+}
 
   private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
     const result = await db

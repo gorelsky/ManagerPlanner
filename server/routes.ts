@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { 
-  insertUserSchema, 
-  insertCitySchema, 
-  insertEmployeeSchema, 
-  insertActivityTypeSchema, 
+import {
+  insertUserSchema,
+  insertCitySchema,
+  insertEmployeeSchema,
+  insertActivityTypeSchema,
   insertActivitySchema,
-  insertMessageSchema
+  updateActivitySchema,   // 🔹 добавили
+  insertMessageSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -319,30 +320,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/activities/:id", async (req, res) => {
-    try {
-      const updateData = insertActivitySchema.partial().parse(req.body);
-      const activity = await storage.updateActivity(req.params.id, updateData);
-      res.json(activity);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid activity data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+  try {
+    const id = req.params.id;
 
-  app.patch("/api/activities/:id/status", async (req, res) => {
-    try {
-      const { status } = z.object({ status: z.string() }).parse(req.body);
-      const activity = await storage.updateActivityStatus(req.params.id, status);
-      res.json(activity);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid status data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
+    const raw = req.body as any;
+
+    const dataToValidate = {
+      ...raw,
+      startDate: raw.startDate ? new Date(raw.startDate) : undefined,
+      endDate: raw.endDate ? new Date(raw.endDate) : undefined,
+    };
+
+    const data = updateActivitySchema.parse(dataToValidate);
+
+    const activity = await storage.updateActivity(id, data);
+    res.json(activity);
+  } catch (error) {
+    console.error("PATCH /api/activities error", error);
+    res.status(400).json({
+      message: "Invalid activity data",
+      errors: (error as any).issues ?? [],
+    });
+  }
+});
+  
+// Календарная агрегированная статистика активностей пользователя по дням
+app.get("/api/activities/calendar/user/:userId", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const start = startDate ? new Date(startDate as string) : undefined;
+    const end = endDate ? new Date(endDate as string) : undefined;
+
+    if (!start || !end) {
+      return res.status(400).json({ message: "startDate и endDate обязательны для календаря" });
     }
-  });
+
+    const stats = await storage.getActivityCalendarStatsByUser(
+      req.params.userId,
+      start,
+      end,
+    );
+
+    res.json({ items: stats });
+  } catch (error) {
+    console.error("[API] /api/activities/calendar/user error", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
   // Messages
   app.get("/api/messages/:userId", async (req, res) => {

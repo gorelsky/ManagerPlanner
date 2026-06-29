@@ -53,7 +53,9 @@ export const activityTypes = pgTable("activity_types", {
   visitEquivalent: numeric("visit_equivalent", {
     precision: 3,
     scale: 1,
-  }).notNull().default("1.0"),
+  })
+    .notNull()
+    .default("1.0"),
 });
 
 export const activities = pgTable("activities", {
@@ -157,19 +159,16 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   }),
 }));
 
-export const managerCitiesRelations = relations(
-  managerCities,
-  ({ one }) => ({
-    manager: one(users, {
-      fields: [managerCities.managerId],
-      references: [users.id],
-    }),
-    city: one(cities, {
-      fields: [managerCities.cityId],
-      references: [cities.id],
-    }),
-  })
-);
+export const managerCitiesRelations = relations(managerCities, ({ one }) => ({
+  manager: one(users, {
+    fields: [managerCities.managerId],
+    references: [users.id],
+  }),
+  city: one(cities, {
+    fields: [managerCities.cityId],
+    references: [cities.id],
+  }),
+}));
 
 /* === Insert schemas === */
 
@@ -196,6 +195,9 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   updatedAt: true,
 });
 
+// 🔽 СХЕМА ДЛЯ PATCH / ОБНОВЛЕНИЯ
+export const updateActivitySchema = insertActivitySchema.partial();
+
 export const insertMessageSchema = createInsertSchema(messages).omit({
   id: true,
   createdAt: true,
@@ -221,6 +223,9 @@ export type InsertActivityType = z.infer<typeof insertActivityTypeSchema>;
 
 export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
+
+// 🔽 ТИП ДЛЯ ОБНОВЛЕНИЯ
+export type UpdateActivity = z.infer<typeof updateActivitySchema>;
 
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;

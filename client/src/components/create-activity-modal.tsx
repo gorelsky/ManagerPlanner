@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -13,8 +12,9 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { insertActivitySchema } from "@shared/schema";
 import { activityApi, cityApi, employeeApi, activityTypeApi } from "@/lib/api";
-import type { InsertActivity } from "@shared/schema";
+import type { InsertActivity, ActivityWithDetails } from "@shared/schema";
 import { z } from "zod";
+import { parseISO } from "date-fns";
 
 const formSchema = insertActivitySchema.omit({ title: true }).extend({
   startDate: z.date({ required_error: "Дата начала обязательна" }),
@@ -31,12 +31,14 @@ interface CreateActivityModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userId: string;
+  activityToEdit?: ActivityWithDetails | null;
 }
 
-export default function CreateActivityModal({ 
-  open, 
-  onOpenChange, 
-  userId 
+export default function CreateActivityModal({
+  open,
+  onOpenChange,
+  userId,
+  activityToEdit,
 }: CreateActivityModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,13 +59,7 @@ export default function CreateActivityModal({
     },
   });
 
-  // БЫЛО: все города
-  // const { data: cities = [] } = useQuery({
-  //   queryKey: ["/api/cities"],
-  //   queryFn: cityApi.getCities,
-  // });
-
-  // СТАЛО: только города зоны текущего менеджера
+  // Города зоны менеджера
   const { data: cities = [] } = useQuery({
     queryKey: ["/api/cities/manager", userId],
     queryFn: () => cityApi.getCitiesByManager(userId),
@@ -82,17 +78,82 @@ export default function CreateActivityModal({
   });
 
   const selectedTypeId = form.watch("typeId");
-  const selectedType = activityTypes.find(type => type.id === selectedTypeId);
+  const selectedType = activityTypes.find((type) => type.id === selectedTypeId);
 
+  // Мутации: создание и обновление
   const createActivityMutation = useMutation({
     mutationFn: activityApi.createActivity,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
       toast({
         title: "Успешно",
         description: "Активность создана",
       });
       onOpenChange(false);
+    },
+    onError: () => {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось создать активность",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateActivityMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<InsertActivity> }) =>
+      activityApi.updateActivity(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
+      toast({
+        title: "Успешно",
+        description: "Активность обновлена",
+      });
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось обновить активность",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Если передана activityToEdit — заполняем форму её значениями
+  useEffect(() => {
+    if (activityToEdit) {
+      const start =
+        activityToEdit.startDate instanceof Date
+          ? activityToEdit.startDate
+          : parseISO(activityToEdit.startDate as unknown as string);
+      const end =
+        activityToEdit.endDate instanceof Date
+          ? activityToEdit.endDate
+          : parseISO(activityToEdit.endDate as unknown as string);
+
+      const startTime = `${String(start.getHours()).padStart(2, "0")}:${String(
+        start.getMinutes(),
+      ).padStart(2, "0")}`;
+      const endTime = `${String(end.getHours()).padStart(2, "0")}:${String(
+        end.getMinutes(),
+      ).padStart(2, "0")}`;
+
+      form.reset({
+        userId: activityToEdit.userId,
+        description: activityToEdit.description || "",
+        status: activityToEdit.status,
+        startDate: start,
+        endDate: end,
+        startTime,
+        endTime,
+        typeId: activityToEdit.typeId,
+        cityId: activityToEdit.cityId,
+        employeeId: activityToEdit.employeeId || "",
+      });
+    } else {
       form.reset({
         userId,
         description: "",
@@ -105,27 +166,20 @@ export default function CreateActivityModal({
         cityId: "",
         employeeId: "",
       });
-    },
-    onError: () => {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось создать активность",
-        variant: "destructive",
-      });
-    },
-  });
+    }
+  }, [activityToEdit, userId, form]);
 
   const onSubmit = (data: FormData) => {
-    const [startHour, startMinute] = data.startTime.split(':').map(Number);
-    const [endHour, endMinute] = data.endTime.split(':').map(Number);
-    
+    const [startHour, startMinute] = data.startTime.split(":").map(Number);
+    const [endHour, endMinute] = data.endTime.split(":").map(Number);
+
     const startDateTime = new Date(data.startDate);
     startDateTime.setHours(startHour, startMinute, 0, 0);
-    
+
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
-    const selectedType = activityTypes.find(type => type.id === data.typeId);
+    const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
 
     const activityData: InsertActivity = {
@@ -140,20 +194,33 @@ export default function CreateActivityModal({
       status: data.status,
     };
 
-    createActivityMutation.mutate(activityData);
+    if (activityToEdit) {
+      updateActivityMutation.mutate({
+        id: activityToEdit.id,
+        data: activityData,
+      });
+    } else {
+      createActivityMutation.mutate(activityData);
+    }
   };
+
+  const isSubmitting =
+    createActivityMutation.isPending || updateActivityMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto" data-testid="create-activity-modal">
+      <DialogContent
+        className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto"
+        data-testid="create-activity-modal"
+      >
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">Новая активность</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            {activityToEdit ? "Редактировать активность" : "Новая активность"}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* тип активности, даты, время — без изменений */}
-
             <FormField
               control={form.control}
               name="typeId"
@@ -207,7 +274,12 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Время начала</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} value={field.value || ""} data-testid="input-start-time" />
+                      <Input
+                        type="time"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-start-time"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -220,7 +292,12 @@ export default function CreateActivityModal({
                   <FormItem>
                     <FormLabel>Время окончания</FormLabel>
                     <FormControl>
-                      <Input type="time" {...field} value={field.value || ""} data-testid="input-end-time" />
+                      <Input
+                        type="time"
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-end-time"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -247,7 +324,7 @@ export default function CreateActivityModal({
               )}
             />
 
-            {/* Город — теперь только из зоны менеджера */}
+            {/* Город — только из зоны менеджера */}
             <FormField
               control={form.control}
               name="cityId"
@@ -280,7 +357,10 @@ export default function CreateActivityModal({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Прикрепленный сотрудник</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value || ""}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-employee">
                           <SelectValue placeholder="Выберите сотрудника" />
@@ -289,7 +369,8 @@ export default function CreateActivityModal({
                       <SelectContent>
                         {employees.map((employee) => (
                           <SelectItem key={employee.id} value={employee.id}>
-                            {employee.lastName} {employee.firstName} {employee.middleName}
+                            {employee.lastName} {employee.firstName}{" "}
+                            {employee.middleName}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -307,9 +388,9 @@ export default function CreateActivityModal({
                 <FormItem>
                   <FormLabel>Описание</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      rows={3} 
-                      placeholder="Подробное описание активности" 
+                    <Textarea
+                      rows={3}
+                      placeholder="Подробное описание активности"
                       {...field}
                       value={field.value || ""}
                       data-testid="textarea-description"
@@ -321,22 +402,26 @@ export default function CreateActivityModal({
             />
 
             <div className="flex space-x-3 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="flex-1" 
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
                 onClick={() => onOpenChange(false)}
                 data-testid="button-cancel"
               >
                 Отмена
               </Button>
-              <Button 
-                type="submit" 
-                className="flex-1" 
-                disabled={createActivityMutation.isPending}
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={isSubmitting}
                 data-testid="button-create"
               >
-                {createActivityMutation.isPending ? "Создание..." : "Создать"}
+                {isSubmitting
+                  ? "Сохранение..."
+                  : activityToEdit
+                  ? "Сохранить"
+                  : "Создать"}
               </Button>
             </div>
           </form>

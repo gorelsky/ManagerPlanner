@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus } from "lucide-react";
-import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import {
+  format,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  addDays,
+  isSameMonth,
+  isSameDay,
+} from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,13 +23,25 @@ import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { userApi, activityApi } from "@/lib/api";
+import { activityApi } from "@/lib/api";
 import type { ActivityWithDetails } from "@shared/schema";
+
+type CalendarStats = {
+  date: string; // "YYYY-MM-DD"
+  planned: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+  rescheduled: number;
+};
 
 export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [editingActivity, setEditingActivity] = useState<ActivityWithDetails | null>(null);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -27,17 +49,37 @@ export default function Dashboard() {
   const startDate = startOfMonth(currentDate);
   const endDate = endOfMonth(currentDate);
 
+  // Список активностей (для режима "Список")
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["/api/activities/user", user?.id, startDate, endDate],
     queryFn: () => activityApi.getActivitiesByUser(user?.id!, startDate, endDate),
     enabled: !!user?.id,
   });
 
+  // Календарная статистика (для режима "Календарь")
+  const {
+    data: calendarStatsData = { items: [] as CalendarStats[] },
+    isLoading: isCalendarLoading,
+  } = useQuery({
+    queryKey: ["/api/activities/calendar/user", user?.id, startDate, endDate],
+    queryFn: () => activityApi.getActivityCalendarStatsByUser(user?.id!, startDate, endDate),
+    enabled: !!user?.id,
+  });
+
+  const calendarStatsMap = useMemo(() => {
+    const map: Record<string, CalendarStats> = {};
+    for (const item of calendarStatsData.items || []) {
+      map[item.date] = item;
+    }
+    return map;
+  }, [calendarStatsData]);
+
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       activityApi.updateActivityStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
       toast({
         title: "Успешно",
         description: "Статус активности обновлен",
@@ -53,37 +95,35 @@ export default function Dashboard() {
   });
 
   const handlePreviousMonth = () => {
-    setCurrentDate(prev => subMonths(prev, 1));
+    setCurrentDate((prev) => subMonths(prev, 1));
   };
 
   const handleNextMonth = () => {
-    setCurrentDate(prev => addMonths(prev, 1));
+    setCurrentDate((prev) => addMonths(prev, 1));
   };
 
   const handleMarkComplete = (id: string) => {
     updateStatusMutation.mutate({ id, status: "completed" });
   };
 
-  const handleEdit = (id: string) => {
-    // TODO: Implement edit functionality
-    toast({
-      title: "В разработке",
-      description: "Функция редактирования будет добавлена",
-    });
+  // Клик по иконке "редактировать" в карточке
+  const handleEdit = (activity: ActivityWithDetails) => {
+    setEditingActivity(activity);
+    setCreateModalOpen(true);
   };
 
   const handleCancel = (id: string) => {
     updateStatusMutation.mutate({ id, status: "cancelled" });
   };
 
-  // Filter activities by search term
-  const filteredActivities = activities.filter(activity =>
+  // Фильтрация для списка
+  const filteredActivities = activities.filter((activity) =>
     activity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     activity.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    activity.city.name.toLowerCase().includes(searchTerm.toLowerCase())
+    activity.city.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Group activities by date
+  // Группировка по датам (для списка)
   const groupedActivities = filteredActivities.reduce((groups, activity) => {
     const dateKey = format(new Date(activity.startDate), "yyyy-MM-dd");
     if (!groups[dateKey]) {
@@ -101,6 +141,22 @@ export default function Dashboard() {
         </div>
       </div>
     );
+  }
+
+  // Построение сетки календаря для текущего месяца
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const calendarStart = startOfWeek(monthStart, { locale: ru, weekStartsOn: 1 });
+  const weeks: Date[][] = [];
+  let current = calendarStart;
+
+  while (current <= monthEnd || weeks.length < 6) {
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(current);
+      current = addDays(current, 1);
+    }
+    weeks.push(week);
   }
 
   return (
@@ -125,31 +181,54 @@ export default function Dashboard() {
 
         <UserProfile user={user} />
 
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mt-2">
           <h3 className="text-white font-medium">План-факт активностей</h3>
-          <Button 
-            className="bg-white text-blue-600 hover:bg-blue-50" 
-            onClick={() => setCreateModalOpen(true)}
+          <Button
+            className="bg-white text-blue-600 hover:bg-blue-50"
+            onClick={() => {
+              setEditingActivity(null);
+              setCreateModalOpen(true);
+            }}
             data-testid="button-add-activity"
           >
             <Plus className="w-4 h-4 mr-1" /> Добавь
+          </Button>
+        </div>
+
+        {/* Переключатель режимов */}
+        <div className="mt-3 flex gap-2">
+          <Button
+            size="sm"
+            variant={viewMode === "list" ? "default" : "outline"}
+            onClick={() => setViewMode("list")}
+          >
+            Список
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "calendar" ? "default" : "outline"}
+            onClick={() => setViewMode("calendar")}
+          >
+            Календарь
           </Button>
         </div>
       </header>
 
       {/* Search and Filters */}
       <div className="px-4 py-4 bg-card">
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <Input 
-            type="text" 
-            placeholder="Поиск" 
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            data-testid="input-search"
-          />
-        </div>
+        {viewMode === "list" && (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              type="text"
+              placeholder="Поиск"
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              data-testid="input-search"
+            />
+          </div>
+        )}
 
         <DateNavigation
           currentDate={currentDate}
@@ -158,42 +237,172 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Activities List */}
-      <div className="px-4">
-        {isLoading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Загрузка активностей...</p>
-          </div>
-        ) : Object.keys(groupedActivities).length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Нет активностей для отображения</p>
-          </div>
-        ) : (
-          Object.entries(groupedActivities)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([dateKey, dayActivities]) => (
-              <div key={dateKey} className="mb-6">
-                <h5 className="text-sm font-medium text-muted-foreground mb-3" data-testid="day-header">
-                  {format(new Date(dateKey), "d MMMM, EEEEEE", { locale: ru })}
-                </h5>
-                {dayActivities.map((activity) => (
-                  <ActivityCard
-                    key={activity.id}
-                    activity={activity}
-                    onMarkComplete={handleMarkComplete}
-                    onEdit={handleEdit}
-                    onCancel={handleCancel}
-                  />
+      {/* Основной контент: список или календарь */}
+      {viewMode === "list" ? (
+        <div className="px-4">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Загрузка активностей...</p>
+            </div>
+          ) : Object.keys(groupedActivities).length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Нет активностей для отображения</p>
+            </div>
+          ) : (
+            Object.entries(groupedActivities)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([dateKey, dayActivities]) => {
+                const isTodayGroup = format(new Date(), "yyyy-MM-dd") === dateKey;
+
+                return (
+                  <div
+                    key={dateKey}
+                    className={[
+                      "mb-6 rounded-lg",
+                      isTodayGroup ? "bg-blue-header-light/60" : "",
+                    ].join(" ")}
+                  >
+                    <h5
+                      className={[
+                        "text-sm font-medium mb-3 px-2 pt-2",
+                        isTodayGroup ? "text-blue-header" : "text-muted-foreground",
+                      ].join(" ")}
+                      data-testid="day-header"
+                    >
+                      {format(new Date(dateKey), "d MMMM, EEEEEE", { locale: ru })}
+                      {isTodayGroup && (
+                        <span className="ml-2 text-xs font-normal uppercase tracking-wide">
+                          Сегодня
+                        </span>
+                      )}
+                    </h5>
+
+                    <div className="space-y-2 pb-2 px-2">
+                      {dayActivities.map((activity) => (
+                        <ActivityCard
+                          key={activity.id}
+                          activity={activity}
+                          onMarkComplete={handleMarkComplete}
+                          onEdit={handleEdit}
+                          onCancel={handleCancel}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+          )}
+        </div>
+      ) : (
+        <div className="px-4 py-4">
+          {isCalendarLoading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Загрузка календаря...</p>
+            </div>
+          ) : (
+            <>
+              {/* Заголовок дней недели */}
+              <div className="grid grid-cols-7 text-xs text-muted-foreground mb-2">
+                {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
+                  <div key={d} className="text-center">
+                    {d}
+                  </div>
                 ))}
               </div>
-            ))
-        )}
-      </div>
+
+              {/* Сетка календаря */}
+              <div className="grid grid-rows-6 gap-1">
+                {weeks.map((week, wi) => (
+                  <div key={wi} className="grid grid-cols-7 gap-1">
+                    {week.map((day) => {
+                      const dateKey = format(day, "yyyy-MM-dd");
+                      const stats = calendarStatsMap[dateKey];
+
+                      const isToday = isSameDay(day, new Date());
+                      const inCurrentMonth = isSameMonth(day, monthStart);
+
+                      return (
+                        <div
+                          key={dateKey}
+                          className={[
+                            "border rounded-md p-1 min-h-[60px] flex flex-col",
+                            inCurrentMonth ? "bg-card" : "bg-muted/40",
+                            isToday
+                              ? "bg-blue-header-light border-blue-header text-blue-header"
+                              : "",
+                          ].join(" ")}
+                        >
+                          <div className="text-xs font-medium mb-1 text-right">
+                            {format(day, "d", { locale: ru })}
+                          </div>
+
+                          {stats ? (
+                            <div className="mt-auto space-y-0.5 text-[10px]">
+                              {stats.planned > 0 && (
+                                <div className="flex items-center justify-between text-blue-600">
+                                  <span>План</span>
+                                  <span>{stats.planned}</span>
+                                </div>
+                              )}
+                              {stats.completed > 0 && (
+                                <div className="flex items-center justify-between text-emerald-600">
+                                  <span>Вып</span>
+                                  <span>{stats.completed}</span>
+                                </div>
+                              )}
+                              {stats.cancelled > 0 && (
+                                <div className="flex items-center justify-between text-red-600">
+                                  <span>Отм</span>
+                                  <span>{stats.cancelled}</span>
+                                </div>
+                              )}
+                              {stats.planned === 0 &&
+                                stats.completed === 0 &&
+                                stats.cancelled === 0 && (
+                                  <div className="text-[10px] text-muted-foreground text-center">
+                                    —
+                                  </div>
+                                )}
+                            </div>
+                          ) : (
+                            <div className="mt-auto text-[10px] text-muted-foreground text-center">
+                              —
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Легенда */}
+              <div className="mt-4 flex gap-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
+                  <span>План</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span>Выполнено</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-600" />
+                  <span>Отменено</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Floating Action Button */}
-      <button 
+      <button
         className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center"
-        onClick={() => setCreateModalOpen(true)}
+        onClick={() => {
+          setEditingActivity(null);
+          setCreateModalOpen(true);
+        }}
         data-testid="button-floating-add"
       >
         <Plus className="w-6 h-6" />
@@ -203,8 +412,14 @@ export default function Dashboard() {
 
       <CreateActivityModal
         open={createModalOpen}
-        onOpenChange={setCreateModalOpen}
+        onOpenChange={(open) => {
+          setCreateModalOpen(open);
+          if (!open) {
+            setEditingActivity(null);
+          }
+        }}
         userId={user?.id || ""}
+        activityToEdit={editingActivity}
       />
     </div>
   );
