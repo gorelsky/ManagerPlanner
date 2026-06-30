@@ -24,9 +24,13 @@ export default function Admin() {
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
   const [isImportingManagers, setIsImportingManagers] = useState(false);
 
-  // NEW: состояние для импорта городов
+  // состояние для импорта городов
   const [citiesCsv, setCitiesCsv] = useState("");
   const [isImportingCities, setIsImportingCities] = useState(false);
+
+  // NEW: состояние для импорта городов менеджеров
+  const [managerCitiesCsv, setManagerCitiesCsv] = useState("");
+  const [isImportingManagerCities, setIsImportingManagerCities] = useState(false);
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -129,7 +133,7 @@ export default function Admin() {
       queryClient.setQueryData(
         ["/api/activities/all"],
         (old: ActivityWithDetails[] | undefined) =>
-          (old ?? []).filter((activity) => activity.id !== deletedId)
+          (old ?? []).filter((activity) => activity.id !== deletedId),
       );
       toast({
         title: "Активность удалена",
@@ -144,7 +148,7 @@ export default function Admin() {
     },
   });
 
-  // NEW: мутация для импорта городов
+  // мутация для импорта городов
   const importCitiesMutation = useMutation({
     mutationFn: (data: string) => cityApi.importCities(data),
     onSuccess: (result) => {
@@ -163,6 +167,28 @@ export default function Admin() {
         variant: "destructive",
       });
       setIsImportingCities(false);
+    },
+  });
+
+  // NEW: мутация для импорта городов менеджеров
+  const importManagerCitiesMutation = useMutation({
+    mutationFn: (data: string) => cityApi.importManagerCities(data),
+    onSuccess: (result) => {
+      toast({
+        title: "Импорт городов менеджеров завершен",
+        description: `Импортировано связей: ${result.imported}`,
+      });
+      setManagerCitiesCsv("");
+      setIsImportingManagerCities(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка импорта городов менеджеров",
+        description:
+          error.message || "Не удалось импортировать связи менеджер ↔ город",
+        variant: "destructive",
+      });
+      setIsImportingManagerCities(false);
     },
   });
 
@@ -204,7 +230,7 @@ export default function Admin() {
     }
   };
 
-  // NEW: обработчик импорта городов
+  // обработчик импорта городов
   const handleImportCities = () => {
     if (!citiesCsv.trim()) {
       toast({
@@ -216,6 +242,20 @@ export default function Admin() {
     }
     setIsImportingCities(true);
     importCitiesMutation.mutate(citiesCsv);
+  };
+
+  // NEW: обработчик импорта городов менеджеров
+  const handleImportManagerCities = () => {
+    if (!managerCitiesCsv.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Введите CSV с связями менеджер ↔ город",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsImportingManagerCities(true);
+    importManagerCitiesMutation.mutate(managerCitiesCsv);
   };
 
   const downloadTemplate = () => {
@@ -321,7 +361,7 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* NEW: Import Cities Section */}
+        {/* Import Cities Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -352,6 +392,41 @@ export default function Admin() {
               {isImportingCities
                 ? "Импортирую города..."
                 : "Импортировать города"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* NEW: Import Manager Cities Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="w-5 h-5" />
+              <span>Массовая загрузка городов менеджеров</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="manager-cities-csv">
+                CSV связи менеджер ↔ город (колонки: managerEmail,city)
+              </Label>
+              <Textarea
+                id="manager-cities-csv"
+                placeholder={`managerEmail,city\nt.tolmacheva@sls-pharma.ru,Барнаул\nn.pervakova@sls-pharma.ru,Волгоград`}
+                value={managerCitiesCsv}
+                onChange={(e) => setManagerCitiesCsv(e.target.value)}
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+
+            <Button
+              onClick={handleImportManagerCities}
+              disabled={isImportingManagerCities || !managerCitiesCsv.trim()}
+              className="w-full"
+            >
+              {isImportingManagerCities
+                ? "Импортирую связи..."
+                : "Импортировать города менеджеров"}
             </Button>
           </CardContent>
         </Card>
@@ -498,8 +573,12 @@ export default function Admin() {
                         </p>
                         <p className="text-sm text-muted-foreground">
                           {employee.city?.name}
-                          {employee.city?.region ? ` (${employee.city.region})` : ""} •{" "}
-                          {employee.manager?.lastName} {employee.manager?.firstName}
+                          {employee.city?.region
+                            ? ` (${employee.city.region})`
+                            : ""}{" "}
+                          •{" "}
+                          {employee.manager?.lastName}{" "}
+                          {employee.manager?.firstName}
                         </p>
                       </div>
                     </div>

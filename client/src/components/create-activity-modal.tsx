@@ -79,27 +79,32 @@ export default function CreateActivityModal({
 
   const selectedTypeId = form.watch("typeId");
   const selectedType = activityTypes.find((type) => type.id === selectedTypeId);
+  const selectedCityId = form.watch("cityId");
+
+  const filteredEmployees = employees.filter(
+    (employee) => employee.cityId === selectedCityId,
+  );
 
   // Мутации: создание и обновление
-  const createActivityMutation = useMutation({
-    mutationFn: activityApi.createActivity,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
-      toast({
-        title: "Успешно",
-        description: "Активность создана",
-      });
-      onOpenChange(false);
-    },
-    onError: () => {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось создать активность",
-        variant: "destructive",
-      });
-    },
-  });
+const createActivityMutation = useMutation({
+  mutationFn: activityApi.createActivity,
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
+    toast({
+      title: "Успешно",
+      description: "Активность создана",
+    });
+    onOpenChange(false);
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Ошибка",
+      description: error?.message || "Не удалось создать активность",
+      variant: "destructive",
+    });
+  },
+});
 
   const updateActivityMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<InsertActivity> }) =>
@@ -351,35 +356,41 @@ export default function CreateActivityModal({
             />
 
             {selectedType?.requiresEmployee && (
-              <FormField
-                control={form.control}
-                name="employeeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Прикрепленный сотрудник</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger data-testid="select-employee">
-                          <SelectValue placeholder="Выберите сотрудника" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {employees.map((employee) => (
-                          <SelectItem key={employee.id} value={employee.id}>
-                            {employee.lastName} {employee.firstName}{" "}
-                            {employee.middleName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+  <FormField
+    control={form.control}
+    name="employeeId"
+    render={({ field }) => (
+      <FormItem>
+        <FormLabel>Прикрепленный сотрудник</FormLabel>
+        <Select
+          onValueChange={field.onChange}
+          defaultValue={field.value || ""}
+          disabled={!selectedCityId}
+        >
+          <FormControl>
+            <SelectTrigger data-testid="select-employee">
+              <SelectValue
+                placeholder={
+                  selectedCityId
+                    ? "Выберите сотрудника"
+                    : "Сначала выберите город"
+                }
               />
-            )}
+            </SelectTrigger>
+          </FormControl>
+          <SelectContent>
+            {filteredEmployees.map((employee) => (
+              <SelectItem key={employee.id} value={employee.id}>
+                {employee.lastName} {employee.firstName} {employee.middleName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
+)}
 
             <FormField
               control={form.control}

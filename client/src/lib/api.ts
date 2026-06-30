@@ -46,6 +46,10 @@ export const cityApi = {
   // Города зоны конкретного менеджера
   getCitiesByManager: (managerId: string): Promise<City[]> =>
     apiRequest("GET", `/api/cities/manager/${managerId}`).then((res) => res.json()),
+
+  // НОВОЕ: импорт связей менеджер ↔ город
+  importManagerCities: (csvData: string): Promise<{ imported: number }> =>
+    apiRequest("POST", "/api/manager-cities/import", { csvData }).then((res) => res.json()),
 };
 
 // Employees
@@ -99,43 +103,64 @@ export const activityApi = {
   getActivity: (id: string): Promise<ActivityWithDetails> =>
     apiRequest("GET", `/api/activities/${id}`).then((res) => res.json()),
 
-  createActivity: (activity: InsertActivity): Promise<Activity> =>
-    apiRequest("POST", "/api/activities", activity).then((res) => res.json()),
+createActivity: async (activity: InsertActivity): Promise<Activity> => {
+  const res = await apiRequest("POST", "/api/activities", activity);
+
+  if (!res.ok) {
+    // пробуем прочитать JSON с сервера
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      // если тело не JSON, просто игнорируем
+    }
+
+    const serverMessage = data?.message;
+    throw new Error(serverMessage || "Не удалось создать активность");
+  }
+
+  return res.json();
+},
 
   // Обновление активности (редактирование)
-  updateActivity: (id: string, activity: Partial<InsertActivity>): Promise<Activity> => {
-    const {
-      userId,
-      typeId,
-      cityId,
-      employeeId,
-      title,
-      description,
-      startDate,
-      endDate,
-      status,
-    } = activity;
+  updateActivity: async (id: string, activity: Partial<InsertActivity>): Promise<Activity> => {
+  const {
+    userId,
+    typeId,
+    cityId,
+    employeeId,
+    title,
+    description,
+    startDate,
+    endDate,
+    status,
+  } = activity;
 
-    const payload: Record<string, unknown> = {};
+  const payload: Record<string, unknown> = {};
 
-    if (userId) payload.userId = userId;
-    if (typeId) payload.typeId = typeId;
-    if (cityId) payload.cityId = cityId;
-    if (employeeId !== undefined) payload.employeeId = employeeId; // может быть null
-    if (title) payload.title = title;
-    if (description !== undefined) payload.description = description;
-    if (startDate) payload.startDate = startDate;
-    if (endDate) payload.endDate = endDate;
-    if (status) payload.status = status;
+  if (userId) payload.userId = userId;
+  if (typeId) payload.typeId = typeId;
+  if (cityId) payload.cityId = cityId;
+  if (employeeId !== undefined) payload.employeeId = employeeId;
+  if (title) payload.title = title;
+  if (description !== undefined) payload.description = description;
+  if (startDate) payload.startDate = startDate;
+  if (endDate) payload.endDate = endDate;
+  if (status) payload.status = status;
 
-    return apiRequest("PATCH", `/api/activities/${id}`, payload).then((res) => res.json());
-  },
+  const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
 
-  updateActivityStatus: (id: string, status: string): Promise<Activity> =>
-    apiRequest("PATCH", `/api/activities/${id}/status`, { status }).then((res) => res.json()),
+  if (!res.ok) {
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {}
+    const serverMessage = data?.message;
+    throw new Error(serverMessage || "Не удалось обновить активность");
+  }
 
-  deleteActivity: (id: string): Promise<void> =>
-    apiRequest("DELETE", `/api/activities/${id}`).then(() => {}),
+  return res.json();
+},
 
   // Календарная статистика активностей пользователя
   getActivityCalendarStatsByUser: (
