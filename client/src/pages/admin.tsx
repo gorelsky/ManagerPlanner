@@ -17,6 +17,7 @@ import { employeeApi, userApi, activityApi, cityApi } from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 
 export default function Admin() {
+  console.log("ADMIN PAGE RENDERED");
   const [csvData, setCsvData] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
@@ -37,17 +38,17 @@ export default function Admin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Только для админов
+   // Только для админов
   if (user?.role !== "admin") {
-    return (
-      <div className="p-4 text-center">
-        <h1 className="text-xl font-semibold mb-4">Доступ запрещен</h1>
-        <p className="text-muted-foreground">
-          Эта страница доступна только администраторам
-        </p>
-        <BottomNavigation />
-      </div>
-    );
+  return (
+  <div className="p-4 text-center">
+  <h1 className="text-xl font-semibold mb-4">Доступ запрещен</h1>
+  <p className="text-muted-foreground">
+  Эта страница доступна только администраторам
+  </p>
+  <BottomNavigation />
+  </div>
+  );
   }
 
   const { data: allEmployees = [], isLoading: employeesLoading } = useQuery({
