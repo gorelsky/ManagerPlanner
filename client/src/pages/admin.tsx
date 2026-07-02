@@ -19,6 +19,7 @@ import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 export default function Admin() {
   const [csvData, setCsvData] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
 
   const [managerFile, setManagerFile] = useState<File | null>(null);
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
@@ -535,108 +536,145 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* All Employees */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Все медицинские представители</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {employeesLoading ? (
-              <div className="text-center py-4">Загрузка...</div>
-            ) : allEmployees.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">
-                  МП пока не загружены
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Используйте форму выше для массовой загрузки
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {allEmployees.map((employee: EmployeeWithDetails) => (
-                  <div
-                    key={employee.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 font-semibold text-sm">
-                          {employee.firstName.charAt(0)}
-                          {employee.lastName.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {employee.lastName} {employee.firstName}{" "}
-                          {employee.middleName}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {employee.city?.name}
-                          {employee.city?.region
-                            ? ` (${employee.city.region})`
-                            : ""}{" "}
-                          •{" "}
-                          {employee.manager?.lastName}{" "}
-                          {employee.manager?.firstName}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {employee.position}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+         {/* Простые вкладки: МП и планы менеджеров */}
+        <div className="mb-4 flex border-b">
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm ${
+              activeTab === "reps"
+                ? "border-b-2 border-blue-600 font-semibold"
+                : "text-muted-foreground"
+            }`}
+            onClick={() => setActiveTab("reps")}
+          >
+            МП
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 text-sm ${
+              activeTab === "plans"
+                ? "border-b-2 border-blue-600 font-semibold"
+                : "text-muted-foreground"
+            }`}
+            onClick={() => setActiveTab("plans")}
+          >
+            Внесение (планы менеджеров)
+          </button>
+        </div>
 
-        {/* All Activities */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Все активности</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activitiesLoading ? (
-              <div className="text-center py-4">Загрузка...</div>
-            ) : allActivities.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                Активности пока не созданы
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {allActivities.map((activity: ActivityWithDetails) => (
-                  <div
-                    key={activity.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex flex-col">
-                      <p className="font-medium">
-                        {activity.type?.name} •{" "}
-                        {activity.employee?.lastName}{" "}
-                        {activity.employee?.firstName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {activity.date} • {activity.user?.lastName}{" "}
-                        {activity.user?.firstName}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        deleteActivityMutation.mutate(activity.id)
-                      }
-                    >
-                      Удалить
-                    </Button>
+        {activeTab === "reps" && (
+          <>
+            {/* All Employees */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Все медицинские представители</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {employeesLoading ? (
+                  <div className="text-center py-4">Загрузка...</div>
+                ) : allEmployees.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">
+                      МП пока не загружены
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Используйте форму выше для массовой загрузки
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                ) : (
+                  <div className="space-y-3">
+                    {allEmployees.map((employee: EmployeeWithDetails) => (
+                      <div
+                        key={employee.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-semibold text-sm">
+                              {employee.firstName.charAt(0)}
+                              {employee.lastName.charAt(0)}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {employee.lastName} {employee.firstName}{" "}
+                              {employee.middleName}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {employee.city?.name}
+                              {employee.city?.region
+                                ? ` (${employee.city.region})`
+                                : ""}{" "}
+                              •{" "}
+                              {employee.manager?.lastName}{" "}
+                              {employee.manager?.firstName}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {employee.position}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {activeTab === "plans" && (
+          <>
+            {/* All Activities */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Все активности</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {activitiesLoading ? (
+                  <div className="text-center py-4">Загрузка...</div>
+                ) : allActivities.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Активности пока не созданы
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {allActivities.map((activity: ActivityWithDetails) => (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex flex-col">
+                          <p className="font-medium">
+                            {activity.type?.name} •{" "}
+                            {activity.employee?.lastName}{" "}
+                            {activity.employee?.firstName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {activity.city?.name} •{" "}
+                            {new Date(activity.startDate).toLocaleString()} —{" "}
+                            {new Date(activity.endDate).toLocaleString()} •{" "}
+                            {activity.user?.lastName}{" "}
+                            {activity.user?.firstName}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            deleteActivityMutation.mutate(activity.id)
+                          }
+                        >
+                          Удалить
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <BottomNavigation />
       </div>
