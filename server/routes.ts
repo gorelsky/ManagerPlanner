@@ -7,13 +7,13 @@ import {
   insertEmployeeSchema,
   insertActivityTypeSchema,
   insertActivitySchema,
-  updateActivitySchema,   // 🔹 добавили
+  updateActivitySchema,
   insertMessageSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import Chat from "@/pages/chat";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize database with seed data
   try {
     await storage.initializeUsers();
     await storage.initializeCities();
@@ -26,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { username, password } = req.body;
-      
+
       if (!username || !password) {
         return res.status(400).json({ message: "Логин и пароль обязательны" });
       }
@@ -36,12 +36,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Неверный логин или пароль" });
       }
 
-      // В реальном приложении здесь должна быть проверка хешированного пароля
       if (user.password !== password) {
         return res.status(401).json({ message: "Неверный логин или пароль" });
       }
 
-      // Не возвращаем пароль в ответе
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error) {
@@ -87,7 +85,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/users/:id", async (req, res) => {
     try {
       const id = req.params.id;
-
       const existingUser = await storage.getUser(id);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
@@ -124,11 +121,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // NEW: import cities from CSV
   app.post("/api/cities/import", async (req, res) => {
     try {
       const { csvData } = req.body as { csvData?: string };
-
       if (!csvData || typeof csvData !== "string") {
         return res.status(400).json({ message: "Invalid CSV data" });
       }
@@ -141,7 +136,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // НОВОЕ: города зоны менеджера
   app.get("/api/cities/manager/:managerId", async (req, res) => {
     try {
       const cities = await storage.getCitiesByManager(req.params.managerId);
@@ -152,11 +146,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // НОВОЕ: импорт зон менеджеров из CSV (managerEmail,city)
   app.post("/api/manager-cities/import", async (req, res) => {
     try {
       const { csvData } = req.body as { csvData?: string };
-
       if (!csvData || typeof csvData !== "string") {
         return res.status(400).json({ message: "Invalid CSV data" });
       }
@@ -201,7 +193,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Import managers (users) from CSV
   app.post("/api/users/import", async (req, res) => {
     try {
       const { csvData, role } = req.body;
@@ -260,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { startDate, endDate } = req.query;
       const start = startDate ? new Date(startDate as string) : undefined;
       const end = endDate ? new Date(endDate as string) : undefined;
-      
+
       const activities = await storage.getAllActivities(start, end);
       res.json(activities);
     } catch (error) {
@@ -273,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { startDate, endDate } = req.query;
       const start = startDate ? new Date(startDate as string) : undefined;
       const end = endDate ? new Date(endDate as string) : undefined;
-      
+
       const activities = await storage.getActivitiesByUser(req.params.userId, start, end);
       res.json(activities);
     } catch (error) {
@@ -293,133 +284,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-app.post("/api/activities", async (req, res) => {
-  try {
-    const body = req.body;
+  app.post("/api/activities", async (req, res) => {
+    try {
+      const body = req.body;
 
-    if (body.startDate) body.startDate = new Date(body.startDate);
-    if (body.endDate) body.endDate = new Date(body.endDate);
+      if (body.startDate) body.startDate = new Date(body.startDate);
+      if (body.endDate) body.endDate = new Date(body.endDate);
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const startDate = new Date(body.startDate);
-    startDate.setHours(0, 0, 0, 0);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const startDate = new Date(body.startDate);
+      startDate.setHours(0, 0, 0, 0);
 
-    if (startDate < now) {
-      return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
+      if (startDate < now) {
+        return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
+      }
+
+      if (body.startDate && body.endDate && body.startDate >= body.endDate) {
+        return res.status(400).json({
+          message: "Дата окончания должна быть позже даты начала",
+        });
+      }
+
+      const activityData = insertActivitySchema.parse(body);
+      const activity = await storage.createActivity(activityData);
+      res.status(201).json(activity);
+    } catch (error) {
+      console.error("POST /api/activities error", error);
+
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid activity data",
+          errors: error.errors,
+        });
+      }
+
+      if ((error as Error).message === "Дата окончания должна быть позже даты начала") {
+        return res.status(400).json({
+          message: (error as Error).message,
+        });
+      }
+
+      if ((error as Error).message === "Пересечение по времени. Повторите планирование") {
+        return res.status(400).json({
+          message: (error as Error).message,
+        });
+      }
+
+      return res.status(500).json({ message: "Internal server error" });
     }
+  });
 
-    // базовая проверка: конец позже начала
-    if (body.startDate && body.endDate && body.startDate >= body.endDate) {
-      return res.status(400).json({
-        message: "Дата окончания должна быть позже даты начала",
-      });
-    }
+  app.patch("/api/activities/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const raw = req.body as any;
 
-    const activityData = insertActivitySchema.parse(body);
-    const activity = await storage.createActivity(activityData);
-    res.status(201).json(activity);
-  } catch (error) {
-    console.error("POST /api/activities error", error);
+      const dataToValidate = {
+        ...raw,
+        startDate: raw.startDate ? new Date(raw.startDate) : undefined,
+        endDate: raw.endDate ? new Date(raw.endDate) : undefined,
+      };
 
-    if (error instanceof z.ZodError) {
+      if (dataToValidate.startDate && dataToValidate.endDate && dataToValidate.startDate >= dataToValidate.endDate) {
+        return res.status(400).json({
+          message: "Дата окончания должна быть позже даты начала",
+        });
+      }
+
+      const data = updateActivitySchema.parse(dataToValidate);
+
+      const activity = await storage.updateActivity(id, data);
+      res.json(activity);
+    } catch (error) {
+      console.error("PATCH /api/activities error", error);
+
+      if ((error as Error).message === "Дата окончания должна быть позже даты начала") {
+        return res.status(400).json({
+          message: (error as Error).message,
+        });
+      }
+
+      if ((error as Error).message === "Пересечение по времени. Повторите планирование") {
+        return res.status(400).json({
+          message: (error as Error).message,
+        });
+      }
+
       return res.status(400).json({
         message: "Invalid activity data",
-        errors: error.errors,
+        errors: (error as any).issues ?? [],
       });
     }
+  });
 
-    if ((error as Error).message === "Дата окончания должна быть позже даты начала") {
-      return res.status(400).json({
-        message: (error as Error).message,
-      });
+  app.get("/api/activities/calendar/user/:userId", async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+
+      if (!start || !end) {
+        return res.status(400).json({ message: "startDate и endDate обязательны для календаря" });
+      }
+
+      const stats = await storage.getActivityCalendarStatsByUser(
+        req.params.userId,
+        start,
+        end,
+      );
+
+      res.json({ items: stats });
+    } catch (error) {
+      console.error("[API] /api/activities/calendar/user error", error);
+      res.status(500).json({ message: "Internal server error" });
     }
-
-    if ((error as Error).message === "Пересечение по времени. Повторите планирование") {
-      return res.status(400).json({
-        message: (error as Error).message,
-      });
-    }
-
-    return res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-app.patch("/api/activities/:id", async (req, res) => {
-  try {
-    const id = req.params.id;
-
-    const raw = req.body as any;
-
-    const dataToValidate = {
-      ...raw,
-      startDate: raw.startDate ? new Date(raw.startDate) : undefined,
-      endDate: raw.endDate ? new Date(raw.endDate) : undefined,
-    };
-
-    // базовая проверка на уровне маршрута: конец позже начала, если оба есть
-    if (dataToValidate.startDate && dataToValidate.endDate && dataToValidate.startDate >= dataToValidate.endDate) {
-      return res.status(400).json({
-        message: "Дата окончания должна быть позже даты начала",
-      });
-    }
-
-    const data = updateActivitySchema.parse(dataToValidate);
-
-    const activity = await storage.updateActivity(id, data);
-    res.json(activity);
-  } catch (error) {
-    console.error("PATCH /api/activities error", error);
-
-    if ((error as Error).message === "Дата окончания должна быть позже даты начала") {
-      return res.status(400).json({
-        message: (error as Error).message,
-      });
-    }
-
-    if ((error as Error).message === "Пересечение по времени. Повторите планирование") {
-      return res.status(400).json({
-        message: (error as Error).message,
-      });
-    }
-
-    return res.status(400).json({
-      message: "Invalid activity data",
-      errors: (error as any).issues ?? [],
-    });
-  }
-});
-  
-// Календарная агрегированная статистика активностей пользователя по дням
-app.get("/api/activities/calendar/user/:userId", async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    const start = startDate ? new Date(startDate as string) : undefined;
-    const end = endDate ? new Date(endDate as string) : undefined;
-
-    if (!start || !end) {
-      return res.status(400).json({ message: "startDate и endDate обязательны для календаря" });
-    }
-
-    const stats = await storage.getActivityCalendarStatsByUser(
-      req.params.userId,
-      start,
-      end,
-    );
-
-    res.json({ items: stats });
-  } catch (error) {
-    console.error("[API] /api/activities/calendar/user error", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
+  });
 
   // Messages
   app.get("/api/messages/:userId", async (req, res) => {
     try {
-      const messages = await storage.getMessages(req.params.userId);
+      const userId = req.params.userId;
+      const messages = await storage.getMessages(userId);
       res.json(messages);
     } catch (error) {
+      console.error("GET /api/messages/:userId error", error);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -430,38 +419,41 @@ app.get("/api/activities/calendar/user/:userId", async (req, res) => {
       const message = await storage.createMessage(messageData);
       res.status(201).json(message);
     } catch (error) {
+      console.error("POST /api/messages error", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid message data", errors: error.errors });
       }
       res.status(500).json({ message: "Internal server error" });
     }
   });
-// Обновление только статуса активности
-app.patch("/api/activities/:id/status", async (req, res) => {
-  try {
-    const id = req.params.id;
-    const { status } = req.body as { status: string };
 
-    if (!status) {
-      return res.status(400).json({ message: "Status is required" });
-    }
-
-    const activity = await storage.updateActivityStatus(id, status);
-    res.json(activity);
-  } catch (error) {
-    console.error("PATCH /api/activities/:id/status error", error);
-    res.status(400).json({
-      message: "Invalid status",
-    });
-  }
-});
-
-  app.patch("/api/messages/:id/read", async (req, res) => {
+  app.patch("/api/messages/:messageId/read", async (req, res) => {
     try {
-      await storage.markMessageAsRead(req.params.id);
+      const messageId = req.params.messageId;
+      await storage.markMessageAsRead(messageId);
       res.status(204).send();
     } catch (error) {
+      console.error("PATCH /api/messages/:messageId/read error", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/activities/:id/status", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { status } = req.body as { status: string };
+
+      if (!status) {
+        return res.status(400).json({ message: "Status is required" });
+      }
+
+      const activity = await storage.updateActivityStatus(id, status);
+      res.json(activity);
+    } catch (error) {
+      console.error("PATCH /api/activities/:id/status error", error);
+      res.status(400).json({
+        message: "Invalid status",
+      });
     }
   });
 

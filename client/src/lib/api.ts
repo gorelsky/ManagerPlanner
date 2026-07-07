@@ -14,6 +14,23 @@ import type {
   EmployeeWithDetails,
 } from "@shared/schema";
 
+// Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
+export type ChatMessageWithUser = any;
+
+// Вспомогательные типы для календарной статистики
+type ActivityCalendarItem = {
+  date: string;
+  planned: number;
+  inProgress: number;
+  completed: number;
+  cancelled: number;
+  rescheduled: number;
+};
+
+type ActivityCalendarStats = {
+  items: ActivityCalendarItem[];
+};
+
 // Users
 export const userApi = {
   getUser: (id: string): Promise<User> =>
@@ -25,7 +42,10 @@ export const userApi = {
   getManagersList: (): Promise<User[]> =>
     apiRequest("GET", "/api/users/managers").then((res) => res.json()),
 
-  importUsers: (csvData: string, role: "manager" | "admin"): Promise<{ imported: number }> =>
+  importUsers: (
+    csvData: string,
+    role: "manager" | "admin",
+  ): Promise<{ imported: number }> =>
     apiRequest("POST", "/api/users/import", { csvData, role }).then((res) => res.json()),
 
   deleteUser: (id: string): Promise<void> =>
@@ -78,12 +98,17 @@ export const activityTypeApi = {
 
 // Activities
 export const activityApi = {
-  getAllActivities: (startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> => {
+  getAllActivities: (
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<ActivityWithDetails[]> => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate.toISOString());
     if (endDate) params.append("endDate", endDate.toISOString());
 
-    const url = `/api/activities/all${params.toString() ? `?${params.toString()}` : ""}`;
+    const url = `/api/activities/all${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
     return apiRequest("GET", url).then((res) => res.json());
   },
 
@@ -96,87 +121,81 @@ export const activityApi = {
     if (startDate) params.append("startDate", startDate.toISOString());
     if (endDate) params.append("endDate", endDate.toISOString());
 
-    const url = `/api/activities/user/${userId}${params.toString() ? `?${params.toString()}` : ""}`;
+    const url = `/api/activities/user/${userId}${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
     return apiRequest("GET", url).then((res) => res.json());
   },
 
   getActivity: (id: string): Promise<ActivityWithDetails> =>
     apiRequest("GET", `/api/activities/${id}`).then((res) => res.json()),
 
-createActivity: async (activity: InsertActivity): Promise<Activity> => {
-  const res = await apiRequest("POST", "/api/activities", activity);
+  createActivity: async (activity: InsertActivity): Promise<Activity> => {
+    const res = await apiRequest("POST", "/api/activities", activity);
 
-  if (!res.ok) {
-    // пробуем прочитать JSON с сервера
-    let data: any = null;
-    try {
-      data = await res.json();
-    } catch {
-      // если тело не JSON, просто игнорируем
+    if (!res.ok) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {}
+
+      const serverMessage = data?.message;
+      throw new Error(serverMessage || "Не удалось создать активность");
     }
 
-    const serverMessage = data?.message;
-    throw new Error(serverMessage || "Не удалось создать активность");
-  }
+    return res.json();
+  },
 
-  return res.json();
-},
+  // Обновление активности (редактирование) — аккуратная версия
+  updateActivity: async (
+    id: string,
+    activity: Partial<InsertActivity>,
+  ): Promise<Activity> => {
+    const {
+      userId,
+      typeId,
+      cityId,
+      employeeId,
+      title,
+      description,
+      startDate,
+      endDate,
+      status,
+    } = activity;
 
-  // Обновление активности (редактирование)
-  updateActivity: async (id: string, activity: Partial<InsertActivity>): Promise<Activity> => {
-  const {
-    userId,
-    typeId,
-    cityId,
-    employeeId,
-    title,
-    description,
-    startDate,
-    endDate,
-    status,
-  } = activity;
+    const payload: Record<string, unknown> = {};
 
-  const payload: Record<string, unknown> = {};
+    if (userId) payload.userId = userId;
+    if (typeId) payload.typeId = typeId;
+    if (cityId) payload.cityId = cityId;
+    if (employeeId !== undefined) payload.employeeId = employeeId;
+    if (title) payload.title = title;
+    if (description !== undefined) payload.description = description;
+    if (startDate) payload.startDate = startDate;
+    if (endDate) payload.endDate = endDate;
+    if (status) payload.status = status;
 
-  if (userId) payload.userId = userId;
-  if (typeId) payload.typeId = typeId;
-  if (cityId) payload.cityId = cityId;
-  if (employeeId !== undefined) payload.employeeId = employeeId;
-  if (title) payload.title = title;
-  if (description !== undefined) payload.description = description;
-  if (startDate) payload.startDate = startDate;
-  if (endDate) payload.endDate = endDate;
-  if (status) payload.status = status;
+    const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
 
-  const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
+    if (!res.ok) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {}
 
-  if (!res.ok) {
-    let data: any = null;
-    try {
-      data = await res.json();
-    } catch {}
-    const serverMessage = data?.message;
-    throw new Error(serverMessage || "Не удалось обновить активность");
-  }
+      const serverMessage = data?.message;
+      throw new Error(serverMessage || "Не удалось обновить активность");
+    }
 
-  return res.json();
-},
+    return res.json();
+  },
 
   // Календарная статистика активностей пользователя
   getActivityCalendarStatsByUser: (
     userId: string,
     startDate: Date,
     endDate: Date,
-  ): Promise<{
-    items: Array<{
-      date: string;
-      planned: number;
-      inProgress: number;
-      completed: number;
-      cancelled: number;
-      rescheduled: number;
-    }>;
-  }> => {
+  ): Promise<ActivityCalendarStats> => {
     const params = new URLSearchParams();
     params.append("startDate", startDate.toISOString());
     params.append("endDate", endDate.toISOString());
@@ -184,4 +203,13 @@ createActivity: async (activity: InsertActivity): Promise<Activity> => {
     const url = `/api/activities/calendar/user/${userId}?${params.toString()}`;
     return apiRequest("GET", url).then((res) => res.json());
   },
+};
+
+// Chat
+export const chatApi = {
+  getMessages: (): Promise<ChatMessageWithUser[]> =>
+    apiRequest("GET", "/api/chat/messages").then((res) => res.json()),
+
+  sendMessage: (text: string): Promise<ChatMessageWithUser> =>
+    apiRequest("POST", "/api/chat/messages", { text }).then((res) => res.json()),
 };
