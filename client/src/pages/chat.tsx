@@ -1,30 +1,47 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Send, Phone } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import type { MessageWithDetails, InsertMessage } from "@shared/schema";
 
 const messageApi = {
-  getMessages: (userId: string) => 
-    fetch(`/api/messages/${userId}`).then(res => res.json()),
+  getMessages: (userId: string) =>
+    fetch(`/api/messages/${userId}`).then((res) => {
+      if (!res.ok) {
+        throw new Error("Не удалось загрузить сообщения");
+      }
+      return res.json();
+    }),
+
   createMessage: (message: InsertMessage) =>
-    fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message)
-    }).then(res => res.json()),
+    fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(message),
+    }).then((res) => {
+      if (!res.ok) {
+        throw new Error("Не удалось отправить сообщение");
+      }
+      return res.json();
+    }),
+
   markAsRead: (messageId: string) =>
-    fetch(`/api/messages/${messageId}/read`, { method: 'PATCH' }),
+    fetch(`/api/messages/${messageId}/read`, {
+      method: "PATCH",
+    }).then((res) => {
+      if (!res.ok) {
+        throw new Error("Не удалось отметить сообщение прочитанным");
+      }
+    }),
 };
 
 export default function Chat() {
@@ -35,7 +52,7 @@ export default function Chat() {
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["/api/messages", user?.id],
-    queryFn: () => messageApi.getMessages(user?.id!),
+    queryFn: () => messageApi.getMessages(user!.id),
     enabled: !!user?.id,
   });
 
@@ -49,10 +66,10 @@ export default function Chat() {
         description: "Ваше сообщение успешно отправлено",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: "Ошибка",
-        description: "Не удалось отправить сообщение",
+        description: error.message || "Не удалось отправить сообщение",
         variant: "destructive",
       });
     },
@@ -63,19 +80,23 @@ export default function Chat() {
 
     const message: InsertMessage = {
       senderId: user.id,
-      receiverId: null, // Общий чат
+      receiverId: null, // общий чат
       content: messageText.trim(),
     };
 
     sendMessageMutation.mutate(message);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
+
+  if (!user) {
+    return null;
+  }
 
   if (isLoading) {
     return (
@@ -97,9 +118,7 @@ export default function Chat() {
             <SideMenu />
             <div>
               <h1 className="text-xl font-semibold">Чат</h1>
-              <p className="text-sm text-white/70">
-                Общение с командой
-              </p>
+              <p className="text-sm text-white/70">Общение с командой</p>
             </div>
           </div>
         </div>
@@ -112,23 +131,20 @@ export default function Chat() {
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                   <Send className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <p className="text-muted-foreground">
-                  Пока нет сообщений
-                </p>
+                <p className="text-muted-foreground">Пока нет сообщений</p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Отправьте первое сообщение
                 </p>
               </div>
             ) : (
               messages.map((message: MessageWithDetails) => {
-                const isOwnMessage = message.senderId === user?.id;
+                const isOwnMessage = message.senderId === user.id;
                 const initials = `${message.sender.firstName[0]}${message.sender.lastName[0]}`;
 
                 return (
                   <div
                     key={message.id}
                     className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} gap-2`}
-                    data-testid={`message-${message.id}`}
                   >
                     {!isOwnMessage && (
                       <Avatar className="w-8 h-8 mt-1">
@@ -140,7 +156,7 @@ export default function Chat() {
                         </AvatarFallback>
                       </Avatar>
                     )}
-                    
+
                     <div className={`max-w-[80%] ${isOwnMessage ? "order-1" : ""}`}>
                       {!isOwnMessage && (
                         <div className="text-xs text-muted-foreground mb-1">
@@ -152,7 +168,7 @@ export default function Chat() {
                           )}
                         </div>
                       )}
-                      
+
                       <div
                         className={`rounded-lg px-3 py-2 ${
                           isOwnMessage
@@ -160,11 +176,21 @@ export default function Chat() {
                             : "bg-muted text-foreground"
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                        <p className={`text-xs mt-1 ${
-                          isOwnMessage ? "text-blue-100" : "text-muted-foreground"
-                        }`}>
-                          {message.createdAt ? format(new Date(message.createdAt), "HH:mm", { locale: ru }) : ""}
+                        <p className="text-sm whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                        <p
+                          className={`text-xs mt-1 ${
+                            isOwnMessage ? "text-blue-100" : "text-muted-foreground"
+                          }`}
+                        >
+                          {message.createdAt
+                            ? format(
+                                new Date(message.createdAt),
+                                "HH:mm",
+                                { locale: ru },
+                              )
+                            : ""}
                         </p>
                       </div>
                     </div>
@@ -175,7 +201,8 @@ export default function Chat() {
                           <AvatarImage src={user.profileImage} />
                         )}
                         <AvatarFallback className="text-xs">
-                          {user.firstName[0]}{user.lastName[0]}
+                          {user.firstName[0]}
+                          {user.lastName[0]}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -196,7 +223,6 @@ export default function Chat() {
                 onChange={(e) => setMessageText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 className="resize-none"
-                data-testid="input-message"
               />
             </div>
             <Button
@@ -204,14 +230,13 @@ export default function Chat() {
               disabled={!messageText.trim() || sendMessageMutation.isPending}
               size="icon"
               className="bg-blue-600 hover:bg-blue-700"
-              data-testid="button-send-message"
             >
               <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </div>
-      
+
       <BottomNavigation />
     </div>
   );

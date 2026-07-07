@@ -447,16 +447,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Status is required" });
       }
 
+      console.log("UPDATE STATUS REQUEST", { id, status });
+
       const activity = await storage.updateActivityStatus(id, status);
+
+      console.log("UPDATE STATUS SUCCESS", activity);
+
       res.json(activity);
     } catch (error) {
       console.error("PATCH /api/activities/:id/status error", error);
-      res.status(400).json({
-        message: "Invalid status",
+      res.status(500).json({
+        message: "Internal server error when updating status",
+        error: (error as any)?.message ?? String(error),
       });
     }
   });
 
+  // ВОТ ЭТОГО КУСОЧКА НЕ ХВАТАЛО:
   const httpServer = createServer(app);
   return httpServer;
 }

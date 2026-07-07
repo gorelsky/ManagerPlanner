@@ -6,7 +6,14 @@ import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi } from "@/lib/api";
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter } from "date-fns";
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfQuarter,
+  endOfQuarter,
+} from "date-fns";
 
 type Period = "week" | "month" | "quarter";
 
@@ -18,7 +25,10 @@ export default function Analytics() {
     const now = new Date();
     switch (period) {
       case "week":
-        return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) };
+        return {
+          start: startOfWeek(now, { weekStartsOn: 1 }),
+          end: endOfWeek(now, { weekStartsOn: 1 }),
+        };
       case "month":
         return { start: startOfMonth(now), end: endOfMonth(now) };
       case "quarter":
@@ -30,15 +40,21 @@ export default function Analytics() {
 
   const { data: activities = [] } = useQuery({
     queryKey: ["/api/activities/user", user?.id, start, end],
-    queryFn: () => activityApi.getActivitiesByUser(user?.id!, start, end),
+    queryFn: () => activityApi.getActivitiesByUser(user!.id, start, end),
     enabled: !!user?.id,
   });
 
   // Calculate statistics
   const totalActivities = activities.length;
-  const completedActivities = activities.filter(a => a.status === "completed").length;
-  const inProgressActivities = activities.filter(a => a.status === "in_progress").length;
-  const cancelledActivities = activities.filter(a => a.status === "cancelled" || a.status === "rescheduled").length;
+  const completedActivities = activities.filter(
+    (a) => a.status === "completed",
+  ).length;
+  const inProgressActivities = activities.filter(
+    (a) => a.status === "in_progress",
+  ).length;
+  const cancelledActivities = activities.filter(
+    (a) => a.status === "cancelled" || a.status === "rescheduled",
+  ).length;
 
   // Activity types breakdown
   const typeBreakdown = activities.reduce((acc, activity) => {
@@ -47,15 +63,12 @@ export default function Analytics() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Chart data for completion by day
+  // Очень простой график: сколько выполнено активностей за выбранный период
   const chartData = [
-    { day: "Пн", completed: 3 },
-    { day: "Вт", completed: 4 },
-    { day: "Ср", completed: 2 },
-    { day: "Чт", completed: 5 },
-    { day: "Пт", completed: 3 },
-    { day: "Сб", completed: 2 },
-    { day: "Вс", completed: 4 },
+    {
+      label: "Выполнено",
+      completed: completedActivities,
+    },
   ];
 
   return (
@@ -76,7 +89,7 @@ export default function Analytics() {
             {[
               { key: "week", label: "Неделя" },
               { key: "month", label: "Месяц" },
-              { key: "quarter", label: "Квартал" }
+              { key: "quarter", label: "Квартал" },
             ].map(({ key, label }) => (
               <Button
                 key={key}
@@ -93,33 +106,61 @@ export default function Analytics() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-muted rounded-lg p-4 text-center" data-testid="stat-total">
-            <div className="text-2xl font-bold text-blue-600">{totalActivities}</div>
-            <div className="text-sm text-muted-foreground">Всего активностей</div>
+          <div
+            className="bg-muted rounded-lg p-4 text-center"
+            data-testid="stat-total"
+          >
+            <div className="text-2xl font-bold text-blue-600">
+              {totalActivities}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Всего активностей
+            </div>
           </div>
-          <div className="bg-muted rounded-lg p-4 text-center" data-testid="stat-completed">
-            <div className="text-2xl font-bold text-green-600">{completedActivities}</div>
+          <div
+            className="bg-muted rounded-lg p-4 text-center"
+            data-testid="stat-completed"
+          >
+            <div className="text-2xl font-bold text-green-600">
+              {completedActivities}
+            </div>
             <div className="text-sm text-muted-foreground">Выполнено</div>
           </div>
-          <div className="bg-muted rounded-lg p-4 text-center" data-testid="stat-in-progress">
-            <div className="text-2xl font-bold text-orange-600">{inProgressActivities}</div>
+          <div
+            className="bg-muted rounded-lg p-4 text-center"
+            data-testid="stat-in-progress"
+          >
+            <div className="text-2xl font-bold text-orange-600">
+              {inProgressActivities}
+            </div>
             <div className="text-sm text-muted-foreground">В процессе</div>
           </div>
-          <div className="bg-muted rounded-lg p-4 text-center" data-testid="stat-cancelled">
-            <div className="text-2xl font-bold text-red-600">{cancelledActivities}</div>
+          <div
+            className="bg-muted rounded-lg p-4 text-center"
+            data-testid="stat-cancelled"
+          >
+            <div className="text-2xl font-bold text-red-600">
+              {cancelledActivities}
+            </div>
             <div className="text-sm text-muted-foreground">Отменено</div>
           </div>
         </div>
 
         {/* Chart */}
         <div className="bg-muted rounded-lg p-6 mb-6">
-          <h4 className="text-sm font-medium text-foreground mb-4">Выполнение по дням</h4>
+          <h4 className="text-sm font-medium text-foreground mb-4">
+            Выполнение за период
+          </h4>
           <div className="h-32">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} />
                 <YAxis hide />
-                <Bar dataKey="completed" fill="hsl(221.2, 83.2%, 53.3%)" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="completed"
+                  fill="hsl(245, 88%, 22%)"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -127,16 +168,26 @@ export default function Analytics() {
 
         {/* Activity Types Breakdown */}
         <div className="space-y-3">
-          <h4 className="text-sm font-medium text-foreground">По типам активностей</h4>
+          <h4 className="text-sm font-medium text-foreground">
+            По типам активностей
+          </h4>
           <div className="space-y-2">
             {Object.entries(typeBreakdown).map(([type, count]) => (
-              <div key={type} className="flex items-center justify-between" data-testid={`type-${type}`}>
+              <div
+                key={type}
+                className="flex items-center justify-between"
+                data-testid={`type-${type}`}
+              >
                 <span className="text-sm text-foreground">{type}</span>
-                <span className="text-sm font-medium text-foreground">{count}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {count}
+                </span>
               </div>
             ))}
             {Object.keys(typeBreakdown).length === 0 && (
-              <p className="text-sm text-muted-foreground">Нет данных для отображения</p>
+              <p className="text-sm text-muted-foreground">
+                Нет данных для отображения
+              </p>
             )}
           </div>
         </div>

@@ -65,7 +65,7 @@ export default function Dashboard() {
     queryFn: () => activityApi.getActivityCalendarStatsByUser(user?.id!, startDate, endDate),
     enabled: !!user?.id,
   });
-
+console.log("CALENDAR_STATS_DATA", calendarStatsData);
   const calendarStatsMap = useMemo(() => {
     const map: Record<string, CalendarStats> = {};
     for (const item of calendarStatsData.items || []) {
