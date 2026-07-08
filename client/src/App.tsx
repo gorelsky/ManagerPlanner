@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
+import { StatusBar } from "@/components/status-bar";
 import Dashboard from "@/pages/dashboard";
 import Representatives from "@/pages/representatives";
 import Analytics from "@/pages/analytics";
@@ -48,11 +49,12 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <div className="min-h-screen bg-background flex">
-  <div className="flex-1">
-    <Toaster />
-    <Router />
-  </div>
-</div>
+            <div className="flex-1">
+              <Toaster />
+              <StatusBar />
+              <Router />
+            </div>
+          </div>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>

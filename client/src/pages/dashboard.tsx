@@ -54,9 +54,7 @@ export default function Dashboard() {
   // Список активностей (для режима "Список") — БЕЗ фильтра по месяцу
   const { data: activities = [], isLoading } = useQuery({
     queryKey: ["/api/activities/user", user?.id],
-    queryFn: () =>
-      // если твой API требует даты, можно передать undefined
-      activityApi.getActivitiesByUser(user!.id),
+    queryFn: () => activityApi.getActivitiesByUser(user!.id),
     enabled: !!user?.id,
   });
 
@@ -204,16 +202,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen pb-20">
-      {/* Status Bar */}
-      <div className="flex justify-between items-center px-4 py-2 text-white text-sm bg-blue-header">
-        <span>3:44</span>
-        <div className="flex space-x-1">
-          <div className="w-4 h-3 bg-white/60 rounded-sm"></div>
-          <div className="w-4 h-3 bg-white/60 rounded-sm"></div>
-          <div className="w-4 h-3 bg-white rounded-sm"></div>
-        </div>
-      </div>
-
       {/* Header */}
       <header className="bg-blue-header text-white px-4 py-4">
         <div className="flex items-center justify-between mb-4">
@@ -295,7 +283,7 @@ export default function Dashboard() {
             </div>
           ) : (
             Object.entries(groupedActivities)
-              .sort(([a], [b]) => a.localeCompare(b))
+              .sort(([a, b]) => a.localeCompare(b))
               .map(([dateKey, dayActivities]) => {
                 const isTodayGroup =
                   format(new Date(), "yyyy-MM-dd") === dateKey;
