@@ -476,30 +476,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/activities/:id/status", async (req, res) => {
-    try {
-      const id = req.params.id;
-      const { status } = req.body as { status: string };
+app.patch("/api/activities/:id/status", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status } = req.body as { status: string };
 
-      if (!status) {
-        return res.status(400).json({ message: "Status is required" });
-      }
-
-      console.log("UPDATE STATUS REQUEST", { id, status });
-
-      const activity = await storage.updateActivityStatus(id, status);
-
-      console.log("UPDATE STATUS SUCCESS", activity);
-
-      res.json(activity);
-    } catch (error) {
-      console.error("PATCH /api/activities/:id/status error", error);
-      res.status(500).json({
-        message: "Internal server error when updating status",
-        error: (error as any)?.message ?? String(error),
-      });
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
     }
-  });
+
+    console.log("UPDATE STATUS REQUEST", { id, status });
+
+    // 1. Получаем текущую активность
+    const existing = await storage.getActivityById(id);
+
+    if (!existing) {
+      return res.status(404).json({ message: "Activity not found" });
+    }
+
+    // 2. Если хотим завершить — проверяем время окончания
+    if (status === "completed") {
+      const now = new Date();
+      const endDateTime = new Date(existing.endDate);
+
+      if (now.getTime() < endDateTime.getTime()) {
+        return res.status(400).json({
+          message: "Нельзя завершить активность раньше времени окончания",
+        });
+      }
+    }
+
+    // 3. Если всё ок — обновляем статус
+    const activity = await storage.updateActivityStatus(id, status);
+
+    console.log("UPDATE STATUS SUCCESS", activity);
+
+    res.json(activity);
+  } catch (error) {
+    console.error("PATCH /api/activities/:id/status error", error);
+    res.status(500).json({
+      message: "Internal server error when updating status",
+      error: (error as any)?.message ?? String(error),
+    });
+  }
+});
 
   // ВОТ ЭТОГО КУСОЧКА НЕ ХВАТАЛО:
   const httpServer = createServer(app);

@@ -184,6 +184,16 @@ const createActivityMutation = useMutation({
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
+    // Валидация: конец не раньше начала
+  if (endDateTime.getTime() < startDateTime.getTime()) {
+    toast({
+      title: "Ошибка",
+      description: "Время окончания не может быть раньше времени начала",
+      variant: "destructive",
+    });
+    return;
+  }
+  
     const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
 

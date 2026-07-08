@@ -28,6 +28,10 @@ export default function ActivityCard({
   const status =
     statusConfig[activity.status as keyof typeof statusConfig] || statusConfig.planned;
 
+  const now = new Date();
+  const endDateTime = new Date(activity.endDate);
+  const canComplete = now.getTime() >= endDateTime.getTime();
+
   return (
     <div
       className="bg-card border border-border rounded-lg p-4 mb-3 shadow-sm"
@@ -87,8 +91,23 @@ export default function ActivityCard({
         </div>
         <div className="flex space-x-2 ml-2">
           <button
-            className="text-green-600 hover:text-green-700 transition-colors"
-            onClick={() => onMarkComplete(activity.id)}
+            className={cn(
+              "transition-colors",
+              canComplete
+                ? "text-green-600 hover:text-green-700"
+                : "text-slate-300 cursor-not-allowed",
+            )}
+            onClick={() => {
+              if (!canComplete) {
+                alert(
+                  `Нельзя завершить активность раньше времени окончания. ` +
+                    `Можно после ${format(endDateTime, "dd.MM.yyyy HH:mm", { locale: ru })}`,
+                );
+                return;
+              }
+
+              onMarkComplete(activity.id);
+            }}
             disabled={activity.status === "completed"}
             data-testid="button-mark-complete"
           >
@@ -96,7 +115,7 @@ export default function ActivityCard({
           </button>
           <button
             className="text-blue-600 hover:text-blue-700 transition-colors"
-            onClick={() => onEdit(activity)} // ← ТУТ
+            onClick={() => onEdit(activity)}
             data-testid="button-edit-activity"
           >
             <Edit className="w-4 h-4" />
