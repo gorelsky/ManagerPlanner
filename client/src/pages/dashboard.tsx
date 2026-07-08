@@ -215,7 +215,7 @@ export default function Dashboard() {
         <div className="flex justify между items-center mt-2">
           <h3 className="text-white font-medium">План-факт активностей</h3>
           <Button
-            className="bg-white text-blue-600 hover:bg-blue-50"
+            className="ml-auto px-3 py-1 rounded bg-green-600 text-white text-sm"
             onClick={() => {
               setEditingActivity(null);
               setCreateModalOpen(true);
@@ -456,7 +456,7 @@ export default function Dashboard() {
 
       {/* Floating Action Button */}
       <button
-        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center"
+        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center"
         onClick={() => {
           setEditingActivity(null);
           setCreateModalOpen(true);

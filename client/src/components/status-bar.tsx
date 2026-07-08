@@ -1,30 +1,43 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-export function StatusBar() {
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+export const StatusBar: React.FC = () => {
+  const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(id);
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const formattedTime = useMemo(
-    () =>
-      new Intl.DateTimeFormat(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(currentTime),
-    [currentTime],
-  );
+ const dateFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
 
+const rawDate = dateFormatter.format(now);
+const dateString = rawDate
+  .replace(" г.", "")
+  .replace(".", "")
+  .replace(" ", ".");
+
+const timeString = now.toLocaleTimeString("ru-RU", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+return (
+  <div className="w-full px-4 py-2 flex items-center justify-end gap-3 bg-slate-900 text-white text-sm">
+    <span>{dateString}</span>
+    <span>{timeString}</span>
+  </div>
+);
   return (
-    <div className="flex justify-between items-center px-4 py-2 text-white text-sm bg-blue-header">
-      <span>{formattedTime}</span>
-      <div className="flex space-x-1">
-        <div className="w-4 h-3 bg-white/60 rounded-sm" />
-        <div className="w-4 h-3 bg-white/60 rounded-sm" />
-        <div className="w-4 h-3 bg-white rounded-sm" />
-      </div>
+    <div className="w-full px-4 py-2 flex items-center justify-end gap-3 bg-slate-900 text-white text-sm">
+      <span>{dateTimeString}</span>
     </div>
   );
-}
+};
