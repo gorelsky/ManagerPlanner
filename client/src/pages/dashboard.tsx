@@ -47,14 +47,16 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  // Эти даты оставляем для календарной статистики, но НЕ режем ими список
   const startDate = startOfMonth(currentDate);
   const endDate = endOfMonth(currentDate);
 
-  // Список активностей (для режима "Список")
+  // Список активностей (для режима "Список") — БЕЗ фильтра по месяцу
   const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["/api/activities/user", user?.id, startDate, endDate],
+    queryKey: ["/api/activities/user", user?.id],
     queryFn: () =>
-      activityApi.getActivitiesByUser(user?.id!, startDate, endDate),
+      // если твой API требует даты, можно передать undefined
+      activityApi.getActivitiesByUser(user!.id),
     enabled: !!user?.id,
   });
 
@@ -66,7 +68,7 @@ export default function Dashboard() {
     queryKey: ["/api/activities/calendar/user", user?.id, startDate, endDate],
     queryFn: () =>
       activityApi.getActivityCalendarStatsByUser(
-        user?.id!,
+        user!.id,
         startDate,
         endDate,
       ),
@@ -100,7 +102,6 @@ export default function Dashboard() {
     for (const item of calendarStatsData.items || []) {
       const dateObj = new Date(item.date);
       const dayKey = dateObj.toISOString().slice(0, 10);
-
       map[dayKey] = item;
     }
 
@@ -119,7 +120,7 @@ export default function Dashboard() {
       });
       toast({
         title: "Успешно",
-        description: "Статус активности обновлен",
+        description: "Статус активности обновлён",
       });
     },
     onError: () => {
@@ -153,12 +154,17 @@ export default function Dashboard() {
     updateStatusMutation.mutate({ id, status: "cancelled" });
   };
 
-  // Фильтрация для списка
-  const filteredActivities = activities.filter((activity) =>
-    activity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    activity.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    activity.city.name.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  // Фильтрация для списка (защита от undefined + пустой запрос)
+  const filteredActivities = activities.filter((activity) => {
+    if (!searchTerm.trim()) return true;
+
+    const q = searchTerm.toLowerCase();
+    const title = activity.title?.toLowerCase() ?? "";
+    const desc = activity.description?.toLowerCase() ?? "";
+    const city = activity.city?.name?.toLowerCase() ?? "";
+
+    return title.includes(q) || desc.includes(q) || city.includes(q);
+  });
 
   // Группировка по датам (для списка)
   const groupedActivities = filteredActivities.reduce((groups, activity) => {
@@ -277,7 +283,65 @@ export default function Dashboard() {
       {/* Основной контент: список или календарь */}
       {viewMode === "list" ? (
         <div className="px-4">
-          {/* твой код списка остаётся как был */}
+          {isLoading ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Загрузка активностей...</p>
+            </div>
+          ) : Object.keys(groupedActivities).length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                Нет активностей для отображения
+              </p>
+            </div>
+          ) : (
+            Object.entries(groupedActivities)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([dateKey, dayActivities]) => {
+                const isTodayGroup =
+                  format(new Date(), "yyyy-MM-dd") === dateKey;
+
+                return (
+                  <div
+                    key={dateKey}
+                    className={[
+                      "mb-6 rounded-lg",
+                      isTodayGroup ? "bg-blue-header-light/60" : "",
+                    ].join(" ")}
+                  >
+                    <h5
+                      className={[
+                        "text-sm font-medium mb-3 px-2 pt-2",
+                        isTodayGroup
+                          ? "text-blue-header"
+                          : "text-muted-foreground",
+                      ].join(" ")}
+                      data-testid="day-header"
+                    >
+                      {format(new Date(dateKey), "d MMMM, EEEEEE", {
+                        locale: ru,
+                      })}
+                      {isTodayGroup && (
+                        <span className="ml-2 text-xs font-normal uppercase tracking-wide">
+                          Сегодня
+                        </span>
+                      )}
+                    </h5>
+
+                    <div className="space-y-2 pb-2 px-2">
+                      {dayActivities.map((activity) => (
+                        <ActivityCard
+                          key={activity.id}
+                          activity={activity}
+                          onMarkComplete={handleMarkComplete}
+                          onEdit={handleEdit}
+                          onCancel={handleCancel}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+          )}
         </div>
       ) : (
         <div className="px-4 py-4">
