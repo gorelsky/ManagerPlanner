@@ -84,6 +84,12 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const holidays = pgTable("holidays", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").notNull(),
+  name: text("name").notNull(),
+});
+
 // новая таблица: города, закреплённые за менеджером
 export const managerCities = pgTable("manager_cities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -170,6 +176,8 @@ export const managerCitiesRelations = relations(managerCities, ({ one }) => ({
   }),
 }));
 
+export const holidaysRelations = relations(holidays, ({}) => ({}));
+
 /* === Insert schemas === */
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -193,6 +201,10 @@ export const insertActivitySchema = createInsertSchema(activities).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertHolidaySchema = createInsertSchema(holidays).omit({
+  id: true,
 });
 
 // 🔽 СХЕМА ДЛЯ PATCH / ОБНОВЛЕНИЯ
@@ -232,6 +244,9 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 export type ManagerCity = typeof managerCities.$inferSelect;
 export type InsertManagerCity = z.infer<typeof insertManagerCitySchema>;
+
+export type Holiday = typeof holidays.$inferSelect;
+export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 
 /* === Extended types with relations === */
 

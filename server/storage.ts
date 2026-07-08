@@ -1,12 +1,13 @@
 import { 
   users, cities, employees, activityTypes, activities, messages,
-  managerCities,
+  managerCities, holidays,
   type User, type InsertUser,
   type City, type InsertCity,
   type Employee, type InsertEmployee, type EmployeeWithDetails,
   type ActivityType, type InsertActivityType,
   type Activity, type InsertActivity, type ActivityWithDetails,
-  type Message, type InsertMessage, type MessageWithDetails
+  type Message, type InsertMessage, type MessageWithDetails,
+  type Holiday, type InsertHoliday,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
@@ -844,6 +845,78 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
       .update(messages)
       .set({ isRead: true })
       .where(eq(messages.id, messageId));
+  }
+  /* === Holidays === */
+
+  async getHolidaysByYear(year: number): Promise<Holiday[]> {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
+
+    return await db
+      .select()
+      .from(holidays)
+      .where(
+        and(
+          gte(holidays.date, start),
+          lte(holidays.date, end),
+        ),
+      )
+      .orderBy(asc(holidays.date));
+  }
+
+  async createHoliday(insertHoliday: InsertHoliday): Promise<Holiday> {
+    const [row] = await db
+      .insert(holidays)
+      .values(insertHoliday)
+      .returning();
+    return row;
+  }
+
+  // Импорт праздников из CSV формата: date,name (date = YYYY-MM-DD)
+  async importHolidaysFromCsv(csvData: string): Promise<{ imported: number }> {
+    const lines = csvData.trim().split("\n");
+    if (lines.length < 2) {
+      return { imported: 0 };
+    }
+
+    const headers = lines[0].split(",").map((h) => h.trim());
+    let imported = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(",").map((v) => v.trim());
+      if (values.length !== headers.length) continue;
+
+      const row: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index];
+      });
+
+      const dateStr = row.date;
+      const name = row.name;
+
+      if (!dateStr || !name) {
+        console.warn(`Invalid holiday row ${i}: date or name is empty`);
+        continue;
+      }
+
+      const date = new Date(dateStr);
+      if (Number.isNaN(date.getTime())) {
+        console.warn(`Invalid holiday date in row ${i}: ${dateStr}`);
+        continue;
+      }
+
+      try {
+        await this.createHoliday({ date, name } as InsertHoliday);
+        imported++;
+      } catch (error) {
+        console.error("Error importing holiday:", error);
+      }
+    }
+
+    return { imported };
   }
 }
 

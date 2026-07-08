@@ -222,6 +222,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Импорт праздничных дней из CSV: date,name (YYYY-MM-DD,Название праздника)
+  app.post("/api/holidays/import", async (req, res) => {
+    try {
+      const { csvData } = req.body;
+
+      if (!csvData || typeof csvData !== "string") {
+        return res.status(400).json({ message: "Invalid CSV data" });
+      }
+
+      const result = await storage.importHolidaysFromCsv(csvData);
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("IMPORT HOLIDAYS ERROR", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+    // Получить праздничные дни за год: GET /api/holidays?year=2026
+  app.get("/api/holidays", async (req, res) => {
+    try {
+      const yearParam = req.query.year;
+      const year = typeof yearParam === "string" ? parseInt(yearParam, 10) : NaN;
+
+      if (!year || Number.isNaN(year)) {
+        return res.status(400).json({ message: "Invalid or missing year parameter" });
+      }
+
+      const rows = await storage.getHolidaysByYear(year);
+      return res.status(200).json(rows);
+      } catch (error) {
+    console.error("GET HOLIDAYS ERROR", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: (error as Error).message,
+    });
+  }
+  });
+
   // Activity Types
   app.get("/api/activity-types", async (_req, res) => {
     try {

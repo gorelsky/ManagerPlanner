@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
-import { employeeApi, userApi, activityApi, cityApi } from "@/lib/api";
+import { employeeApi, userApi, activityApi, cityApi, holidaysApi } from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 
 export default function Admin() {
@@ -30,25 +30,30 @@ export default function Admin() {
   const [citiesCsv, setCitiesCsv] = useState("");
   const [isImportingCities, setIsImportingCities] = useState(false);
 
-  // NEW: состояние для импорта городов менеджеров
+  // состояние для импорта городов менеджеров
   const [managerCitiesCsv, setManagerCitiesCsv] = useState("");
-  const [isImportingManagerCities, setIsImportingManagerCities] = useState(false);
+  const [isImportingManagerCities, setIsImportingManagerCities] =
+    useState(false);
+
+  // состояние для импорта праздников
+  const [holidaysCsv, setHolidaysCsv] = useState("");
+  const [isImportingHolidays, setIsImportingHolidays] = useState(false);
 
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-   // Только для админов
+  // Только для админов
   if (user?.role !== "admin") {
-  return (
-  <div className="p-4 text-center">
-  <h1 className="text-xl font-semibold mb-4">Доступ запрещен</h1>
-  <p className="text-muted-foreground">
-  Эта страница доступна только администраторам
-  </p>
-  <BottomNavigation />
-  </div>
-  );
+    return (
+      <div className="p-4 text-center">
+        <h1 className="text-xl font-semibold mb-4">Доступ запрещен</h1>
+        <p className="text-muted-foreground">
+          Эта страница доступна только администраторам
+        </p>
+        <BottomNavigation />
+      </div>
+    );
   }
 
   const { data: allEmployees = [], isLoading: employeesLoading } = useQuery({
@@ -172,7 +177,7 @@ export default function Admin() {
     },
   });
 
-  // NEW: мутация для импорта городов менеджеров
+  // мутация для импорта городов менеджеров
   const importManagerCitiesMutation = useMutation({
     mutationFn: (data: string) => cityApi.importManagerCities(data),
     onSuccess: (result) => {
@@ -246,7 +251,7 @@ export default function Admin() {
     importCitiesMutation.mutate(citiesCsv);
   };
 
-  // NEW: обработчик импорта городов менеджеров
+  // обработчик импорта городов менеджеров
   const handleImportManagerCities = () => {
     if (!managerCitiesCsv.trim()) {
       toast({
@@ -258,6 +263,35 @@ export default function Admin() {
     }
     setIsImportingManagerCities(true);
     importManagerCitiesMutation.mutate(managerCitiesCsv);
+  };
+
+  // обработчик импорта праздников
+  const handleImportHolidays = async () => {
+    if (!holidaysCsv.trim()) {
+      toast({
+        title: "Ошибка",
+        description: "Введите CSV с праздниками",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      setIsImportingHolidays(true);
+      const result = await holidaysApi.importHolidays(holidaysCsv);
+      toast({
+        title: "Импорт праздников завершен",
+        description: `Импортировано праздников: ${result.imported ?? 0}`,
+      });
+      setHolidaysCsv("");
+    } catch (error: any) {
+      toast({
+        title: "Ошибка импорта праздников",
+        description: error.message || "Не удалось импортировать праздники",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImportingHolidays(false);
+    }
   };
 
   const downloadTemplate = () => {
@@ -398,7 +432,7 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* NEW: Import Manager Cities Section */}
+        {/* Import Manager Cities Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -423,12 +457,49 @@ export default function Admin() {
 
             <Button
               onClick={handleImportManagerCities}
-              disabled={isImportingManagerCities || !managerCitiesCsv.trim()}
+              disabled={
+                isImportingManagerCities || !managerCitiesCsv.trim()
+              }
               className="w-full"
             >
               {isImportingManagerCities
                 ? "Импортирую связи..."
                 : "Импортировать города менеджеров"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Import Holidays Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Upload className="w-5 h-5" />
+              <span>Массовая загрузка праздничных дней</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="holidays-csv">
+                CSV праздники (колонки: date,name)
+              </Label>
+              <Textarea
+                id="holidays-csv"
+                placeholder={`date,name\n2026-01-01,Новый год\n2026-01-07,Рождество`}
+                value={holidaysCsv}
+                onChange={(e) => setHolidaysCsv(e.target.value)}
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+
+            <Button
+              onClick={handleImportHolidays}
+              disabled={isImportingHolidays || !holidaysCsv.trim()}
+              className="w-full"
+            >
+              {isImportingHolidays
+                ? "Импортирую праздники..."
+                : "Импортировать праздники"}
             </Button>
           </CardContent>
         </Card>
@@ -537,7 +608,7 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-         {/* Простые вкладки: МП и планы менеджеров */}
+        {/* Простые вкладки: МП и планы менеджеров */}
         <div className="mb-4 flex border-b">
           <button
             type="button"
@@ -653,7 +724,10 @@ export default function Admin() {
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {activity.city?.name} •{" "}
-                            {new Date(activity.startDate).toLocaleString()} —{" "}
+                            {new Date(
+                              activity.startDate,
+                            ).toLocaleString()}{" "}
+                            —{" "}
                             {new Date(activity.endDate).toLocaleString()} •{" "}
                             {activity.user?.lastName}{" "}
                             {activity.user?.firstName}

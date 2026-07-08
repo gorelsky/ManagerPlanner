@@ -1,11 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from "recharts";;
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  LabelList,
+  Cell,
+} from "recharts";
 import { Button } from "@/components/ui/button";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi } from "@/lib/api";
+import { activityApi, holidaysApi } from "@/lib/api";
 import {
   startOfWeek,
   endOfWeek,
@@ -38,13 +46,31 @@ export default function Analytics() {
 
   const { start, end } = getPeriodDates(selectedPeriod);
 
+  // Активности пользователя
   const { data: activities = [] } = useQuery({
     queryKey: ["/api/activities/user", user?.id, start, end],
     queryFn: () => activityApi.getActivitiesByUser(user!.id, start, end),
     enabled: !!user?.id,
   });
 
-  // Calculate statistics
+  // Праздники для года начала периода
+  const periodYear = start.getFullYear();
+  const { data: holidays = [] } = useQuery({
+    queryKey: ["/api/holidays", periodYear],
+    queryFn: () =>
+      holidaysApi.getHolidaysForYear(periodYear) as Promise<
+        { date: string; name: string }[]
+      >,
+  });
+
+  // Множество дат-праздников "YYYY-MM-DD"
+  const holidayDates = new Set(
+    holidays.map((h: any) =>
+      new Date(h.date).toISOString().slice(0, 10),
+    ),
+  );
+
+  // Статистика
   const totalActivities = activities.length;
   const completedActivities = activities.filter(
     (a) => a.status === "completed",
@@ -56,48 +82,58 @@ export default function Analytics() {
     (a) => a.status === "cancelled" || a.status === "rescheduled",
   ).length;
 
-  // Activity types breakdown
   const typeBreakdown = activities.reduce((acc, activity) => {
     const typeName = activity.type.name;
     acc[typeName] = (acc[typeName] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-// График: сколько выполнено активностей по дням периода
-const chartData = (() => {
-  const days: { label: string; completed: number; isWeekend: boolean }[] = [];
+  // Данные для графика
+  const chartData = (() => {
+    const days: {
+      label: string;
+      completed: number;
+      isWeekend: boolean;
+      isHoliday: boolean;
+    }[] = [];
 
-  const cursor = new Date(start);
+    const cursor = new Date(start);
 
-  while (cursor <= end) {
-    const dayKey = cursor.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    while (cursor <= end) {
+      const dayKey = cursor.toISOString().slice(0, 10); // "YYYY-MM-DD"
 
-    const completedForDay = activities.filter((a) => {
-      const dateStr =
-        a.startDate instanceof Date
-          ? a.startDate.toISOString().slice(0, 10)
-          : String(a.startDate).slice(0, 10);
-      return a.status === "completed" && dateStr === dayKey;
-    }).length;
+      const completedForDay = activities.filter((a) => {
+        const dateStr =
+          a.startDate instanceof Date
+            ? a.startDate.toISOString().slice(0, 10)
+            : String(a.startDate).slice(0, 10);
+        return a.status === "completed" && dateStr === dayKey;
+      }).length;
 
-    const dayOfWeek = cursor.getDay(); // 0 - воскресенье, 6 - суббота
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const dayOfWeek = cursor.getDay(); // 0 - воскресенье, 6 - суббота
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isHoliday = holidayDates.has(dayKey);
 
-const day = cursor.getDate().toString().padStart(2, "0");
-const month = (cursor.getMonth() + 1).toString().padStart(2, "0");
+      const day = cursor.getDate().toString().padStart(2, "0");
+      const month = (cursor.getMonth() + 1).toString().padStart(2, "0");
 
-days.push({
-  label: `${day}.${month}`, // например "08.06"
-  completed: completedForDay,
-  isWeekend,
-});
+      days.push({
+        label: `${day}.${month}`,
+        completed: completedForDay,
+        isWeekend,
+        isHoliday,
+      });
 
-    cursor.setDate(cursor.getDate() + 1);
-  }
+      cursor.setDate(cursor.getDate() + 1);
+    }
 
-  return days;
-})();
-
+    return days;
+  })();
+console.log("chartData[0]", chartData[0]);
+console.log("chartData[1]", chartData[1]);
+console.log("ANALYTICS chartData", chartData);
+console.log("ANALYTICS period", start.toISOString(), end.toISOString());
+console.log("ANALYTICS holidays", holidays);
   return (
     <div className="min-h-screen pb-20">
       {/* Header */}
@@ -173,60 +209,71 @@ days.push({
           </div>
         </div>
 
-{/* Chart */}
-<div className="bg-muted rounded-lg p-6 mb-6">
-  <h4 className="text-sm font-medium text-foreground mb-2">
-    Выполнение за период
-  </h4>
-  <div className="h-32 flex flex-col items-stretch justify-between">
-    <div className="flex justify-center">
-      <span className="text-sm font-semibold text-foreground">
-        {completedActivities}
-      </span>
-    </div>
-    <div className="flex-1">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData}>
-<XAxis
+        {/* Chart */}
+        <div className="bg-muted rounded-lg p-6 mb-6">
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            Выполнение за период
+          </h4>
+          <div className="h-32 flex flex-col items-stretch justify-between">
+            <div className="flex justify-center">
+              <span className="text-sm font-semibold text-foreground">
+                {completedActivities}
+              </span>
+            </div>
+            <div className="flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <XAxis
   dataKey="label"
   axisLine={false}
   tickLine={false}
-  tickFormatter={(_, index) => chartData[index]?.label}
-  tick={({ x, y, payload, index }) => {
-    const isWeekend = chartData[index]?.isWeekend;
+  tick={(props: any) => {
+    const { x, y, payload, index } = props;
+    const item = chartData[index];
+
+    const isWeekend = item?.isWeekend;
+    const isHoliday = item?.isHoliday;
+
+    let fill = "#6b7280"; // обычный серый (text-muted-foreground)
+    if (isWeekend) fill = "#ef4444"; // выходной — красный
+    if (isHoliday) fill = "#f97316"; // праздник — оранжевый
+
     return (
       <text
         x={x}
         y={y + 10}
         textAnchor="middle"
-        className={
-          isWeekend
-            ? "fill-red-500 text-[10px]"
-            : "fill-muted-foreground text-[10px]"
-        }
+        fill={fill}
+        fontSize={10}
       >
         {payload.value}
       </text>
     );
   }}
 />
-          <YAxis hide />
-          <Bar
-            dataKey="completed"
-            fill="hsl(211, 26%, 46%)"
-            radius={[4, 4, 0, 0]}
-          >
-            <LabelList
-              dataKey="completed"
-              position="top"
-              className="fill-white text-[0px] font-bold"
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  </div>
-</div>
+                  <YAxis hide />
+                  <Bar
+                    dataKey="completed"
+                    radius={[4, 4, 0, 0]}
+                  >
+                    {chartData.map((entry, index) => {
+                      let color = "hsl(211, 26%, 46%)"; // обычный день
+                      if (entry.isWeekend) color = "#EF4444"; // выходной — красный
+                      if (entry.isHoliday) color = "#F97316"; // праздник — оранжевый
+
+                      return <Cell key={index} fill={color} />;
+                    })}
+                    <LabelList
+                      dataKey="completed"
+                      position="top"
+                      className="fill-white text-[0px] font-bold"
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
 
         {/* Activity Types Breakdown */}
         <div className="space-y-3">

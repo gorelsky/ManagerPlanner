@@ -46,7 +46,9 @@ export const userApi = {
     csvData: string,
     role: "manager" | "admin",
   ): Promise<{ imported: number }> =>
-    apiRequest("POST", "/api/users/import", { csvData, role }).then((res) => res.json()),
+    apiRequest("POST", "/api/users/import", { csvData, role }).then((res) =>
+      res.json(),
+    ),
 
   deleteUser: (id: string): Promise<void> =>
     apiRequest("DELETE", `/api/users/${id}`).then(() => {}),
@@ -61,21 +63,31 @@ export const cityApi = {
     apiRequest("POST", "/api/cities", city).then((res) => res.json()),
 
   importCities: (csvData: string): Promise<{ imported: number }> =>
-    apiRequest("POST", "/api/cities/import", { csvData }).then((res) => res.json()),
+    apiRequest("POST", "/api/cities/import", { csvData }).then((res) =>
+      res.json(),
+    ),
 
   // Города зоны конкретного менеджера
   getCitiesByManager: (managerId: string): Promise<City[]> =>
-    apiRequest("GET", `/api/cities/manager/${managerId}`).then((res) => res.json()),
+    apiRequest("GET", `/api/cities/manager/${managerId}`).then((res) =>
+      res.json(),
+    ),
 
   // НОВОЕ: импорт связей менеджер ↔ город
   importManagerCities: (csvData: string): Promise<{ imported: number }> =>
-    apiRequest("POST", "/api/manager-cities/import", { csvData }).then((res) => res.json()),
+    apiRequest("POST", "/api/manager-cities/import", { csvData }).then((res) =>
+      res.json(),
+    ),
 };
 
 // Employees
 export const employeeApi = {
-  getEmployeesByManager: (managerId: string): Promise<EmployeeWithDetails[]> =>
-    apiRequest("GET", `/api/employees/manager/${managerId}`).then((res) => res.json()),
+  getEmployeesByManager: (
+    managerId: string,
+  ): Promise<EmployeeWithDetails[]> =>
+    apiRequest("GET", `/api/employees/manager/${managerId}`).then((res) =>
+      res.json(),
+    ),
 
   getAllEmployees: (): Promise<EmployeeWithDetails[]> =>
     apiRequest("GET", "/api/employees/all").then((res) => res.json()),
@@ -84,7 +96,9 @@ export const employeeApi = {
     apiRequest("POST", "/api/employees", employee).then((res) => res.json()),
 
   importEmployees: (csvData: string): Promise<{ imported: number }> =>
-    apiRequest("POST", "/api/employees/import", { csvData }).then((res) => res.json()),
+    apiRequest("POST", "/api/employees/import", { csvData }).then((res) =>
+      res.json(),
+    ),
 };
 
 // Activity Types
@@ -92,8 +106,12 @@ export const activityTypeApi = {
   getActivityTypes: (): Promise<ActivityType[]> =>
     apiRequest("GET", "/api/activity-types").then((res) => res.json()),
 
-  createActivityType: (activityType: InsertActivityType): Promise<ActivityType> =>
-    apiRequest("POST", "/api/activity-types", activityType).then((res) => res.json()),
+  createActivityType: (
+    activityType: InsertActivityType,
+  ): Promise<ActivityType> =>
+    apiRequest("POST", "/api/activity-types", activityType).then((res) =>
+      res.json(),
+    ),
 };
 
 // Activities
@@ -189,9 +207,15 @@ export const activityApi = {
 
     return res.json();
   },
+
   // Обновление статуса активности (выполнено / отменено и т.п.)
-  updateActivityStatus: async (id: string, status: string): Promise<Activity> => {
-    const res = await apiRequest("PATCH", `/api/activities/${id}/status`, { status });
+  updateActivityStatus: async (
+    id: string,
+    status: string,
+  ): Promise<Activity> => {
+    const res = await apiRequest("PATCH", `/api/activities/${id}/status`, {
+      status,
+    });
 
     if (!res.ok) {
       let data: any = null;
@@ -205,6 +229,7 @@ export const activityApi = {
 
     return res.json();
   },
+
   // Календарная статистика активностей пользователя
   getActivityCalendarStatsByUser: (
     userId: string,
@@ -220,11 +245,27 @@ export const activityApi = {
   },
 };
 
+export const holidaysApi = {
+  importHolidays(csvData: string) {
+    return apiRequest("POST", "/api/holidays/import", { csvData }).then((res) =>
+      res.json(),
+    );
+  },
+
+  getHolidaysForYear(year: number) {
+    return apiRequest("GET", `/api/holidays?year=${year}`).then((res) =>
+      res.json(),
+    );
+  },
+};
+
 // Chat
 export const chatApi = {
   getMessages: (): Promise<ChatMessageWithUser[]> =>
     apiRequest("GET", "/api/chat/messages").then((res) => res.json()),
 
   sendMessage: (text: string): Promise<ChatMessageWithUser> =>
-    apiRequest("POST", "/api/chat/messages", { text }).then((res) => res.json()),
+    apiRequest("POST", "/api/chat/messages", { text }).then((res) =>
+      res.json(),
+    ),
 };
