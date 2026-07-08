@@ -753,6 +753,22 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
 
   return activity;
 }
+  async updateActivityStatus(id: string, status: string): Promise<Activity> {
+    const [activity] = await db
+      .update(activities)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, id))
+      .returning();
+
+    if (!activity) {
+      throw new Error("Activity not found");
+    }
+
+    return activity;
+  }
   /* === Messages === */
 
   async getMessages(userId: string): Promise<MessageWithDetails[]> {

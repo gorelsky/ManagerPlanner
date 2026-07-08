@@ -189,7 +189,22 @@ export const activityApi = {
 
     return res.json();
   },
+  // Обновление статуса активности (выполнено / отменено и т.п.)
+  updateActivityStatus: async (id: string, status: string): Promise<Activity> => {
+    const res = await apiRequest("PATCH", `/api/activities/${id}/status`, { status });
 
+    if (!res.ok) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {}
+
+      const serverMessage = data?.message;
+      throw new Error(serverMessage || "Не удалось обновить статус активности");
+    }
+
+    return res.json();
+  },
   // Календарная статистика активностей пользователя
   getActivityCalendarStatsByUser: (
     userId: string,

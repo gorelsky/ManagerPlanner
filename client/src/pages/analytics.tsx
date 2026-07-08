@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList } from "recharts";;
 import { Button } from "@/components/ui/button";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
@@ -63,13 +63,40 @@ export default function Analytics() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Очень простой график: сколько выполнено активностей за выбранный период
-  const chartData = [
-    {
-      label: "Выполнено",
-      completed: completedActivities,
-    },
-  ];
+// График: сколько выполнено активностей по дням периода
+const chartData = (() => {
+  const days: { label: string; completed: number; isWeekend: boolean }[] = [];
+
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    const dayKey = cursor.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+    const completedForDay = activities.filter((a) => {
+      const dateStr =
+        a.startDate instanceof Date
+          ? a.startDate.toISOString().slice(0, 10)
+          : String(a.startDate).slice(0, 10);
+      return a.status === "completed" && dateStr === dayKey;
+    }).length;
+
+    const dayOfWeek = cursor.getDay(); // 0 - воскресенье, 6 - суббота
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+const day = cursor.getDate().toString().padStart(2, "0");
+const month = (cursor.getMonth() + 1).toString().padStart(2, "0");
+
+days.push({
+  label: `${day}.${month}`, // например "08.06"
+  completed: completedForDay,
+  isWeekend,
+});
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return days;
+})();
 
   return (
     <div className="min-h-screen pb-20">
@@ -146,25 +173,60 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Chart */}
-        <div className="bg-muted rounded-lg p-6 mb-6">
-          <h4 className="text-sm font-medium text-foreground mb-4">
-            Выполнение за период
-          </h4>
-          <div className="h-32">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="label" axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Bar
-                  dataKey="completed"
-                  fill="hsl(245, 88%, 22%)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+{/* Chart */}
+<div className="bg-muted rounded-lg p-6 mb-6">
+  <h4 className="text-sm font-medium text-foreground mb-2">
+    Выполнение за период
+  </h4>
+  <div className="h-32 flex flex-col items-stretch justify-between">
+    <div className="flex justify-center">
+      <span className="text-sm font-semibold text-foreground">
+        {completedActivities}
+      </span>
+    </div>
+    <div className="flex-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={chartData}>
+<XAxis
+  dataKey="label"
+  axisLine={false}
+  tickLine={false}
+  tickFormatter={(_, index) => chartData[index]?.label}
+  tick={({ x, y, payload, index }) => {
+    const isWeekend = chartData[index]?.isWeekend;
+    return (
+      <text
+        x={x}
+        y={y + 10}
+        textAnchor="middle"
+        className={
+          isWeekend
+            ? "fill-red-500 text-[10px]"
+            : "fill-muted-foreground text-[10px]"
+        }
+      >
+        {payload.value}
+      </text>
+    );
+  }}
+/>
+          <YAxis hide />
+          <Bar
+            dataKey="completed"
+            fill="hsl(211, 26%, 46%)"
+            radius={[4, 4, 0, 0]}
+          >
+            <LabelList
+              dataKey="completed"
+              position="top"
+              className="fill-white text-[0px] font-bold"
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+</div>
 
         {/* Activity Types Breakdown */}
         <div className="space-y-3">
