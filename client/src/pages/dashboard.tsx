@@ -226,23 +226,33 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* Переключатель режимов */}
-        <div className="mt-3 flex gap-2">
-          <Button
-            size="sm"
-            variant={viewMode === "list" ? "default" : "outline"}
-            onClick={() => setViewMode("list")}
-          >
-            Список
-          </Button>
-          <Button
-            size="sm"
-            variant={viewMode === "calendar" ? "default" : "outline"}
-            onClick={() => setViewMode("calendar")}
-          >
-            Календарь
-          </Button>
-        </div>
+{/* Переключатель режимов */}
+<div className="mt-3 flex gap-2">
+  <Button
+    size="sm"
+    variant={viewMode === "list" ? "default" : "outline"}
+    className={
+      viewMode === "list"
+        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+        : "border-emerald-600 text-emerald-700"
+    }
+    onClick={() => setViewMode("list")}
+  >
+    Список
+  </Button>
+  <Button
+    size="sm"
+    variant={viewMode === "calendar" ? "default" : "outline"}
+    className={
+      viewMode === "calendar"
+        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+        : "border-emerald-600 text-emerald-700"
+    }
+    onClick={() => setViewMode("calendar")}
+  >
+    Календарь
+  </Button>
+</div>
       </header>
 
       {/* Search and Filters */}

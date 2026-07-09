@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
+import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -109,11 +110,12 @@ export default function Chat() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-sm mx-auto bg-card min-h-screen flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-blue-header text-white">
+return (
+  <div className="min-h-screen bg-background">
+    <div className="max-w-sm mx-auto bg-card min-h-screen flex flex-col">
+      {/* Header */}
+      <div className="border-b border-border bg-blue-header text-white">
+        <div className="flex items-center justify-between p-4">
           <div className="flex items-center space-x-3">
             <SideMenu />
             <div>
@@ -122,6 +124,10 @@ export default function Chat() {
             </div>
           </div>
         </div>
+
+        {/* Профиль текущего менеджера */}
+        {user && <UserProfile user={user} />}
+      </div>
 
         {/* Messages */}
         <ScrollArea className="flex-1 px-4">

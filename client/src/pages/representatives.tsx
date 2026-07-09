@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
+import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { employeeApi } from "@/lib/api";
 import type { EmployeeWithDetails } from "@shared/schema";
@@ -39,7 +40,9 @@ export default function Representatives() {
           <SideMenu />
           <h1 className="text-lg font-semibold">Медицинские представители</h1>
           <div></div>
-        </div>
+              </div>
+       {/* Профиль текущего менеджера */}
+      {user && <UserProfile user={user} />}
       </header>
       <div className="p-4">
       <div className="flex items-center justify-between mb-6">

@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
+import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi, holidaysApi } from "@/lib/api";
 import {
@@ -23,11 +24,14 @@ import {
   endOfQuarter,
 } from "date-fns";
 
+
 type Period = "week" | "month" | "quarter";
+
 
 export default function Analytics() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
   const { user } = useAuth();
+
 
   const getPeriodDates = (period: Period) => {
     const now = new Date();
@@ -44,7 +48,9 @@ export default function Analytics() {
     }
   };
 
+
   const { start, end } = getPeriodDates(selectedPeriod);
+
 
   // Активности пользователя
   const { data: activities = [] } = useQuery({
@@ -52,6 +58,7 @@ export default function Analytics() {
     queryFn: () => activityApi.getActivitiesByUser(user!.id, start, end),
     enabled: !!user?.id,
   });
+
 
   // Праздники для года начала периода
   const periodYear = start.getFullYear();
@@ -63,12 +70,14 @@ export default function Analytics() {
       >,
   });
 
+
   // Множество дат-праздников "YYYY-MM-DD"
   const holidayDates = new Set(
     holidays.map((h: any) =>
       new Date(h.date).toISOString().slice(0, 10),
     ),
   );
+
 
   // Статистика
   const totalActivities = activities.length;
@@ -82,11 +91,13 @@ export default function Analytics() {
     (a) => a.status === "cancelled" || a.status === "rescheduled",
   ).length;
 
+
   const typeBreakdown = activities.reduce((acc, activity) => {
     const typeName = activity.type.name;
     acc[typeName] = (acc[typeName] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
 
   // Данные для графика
   const chartData = (() => {
@@ -97,10 +108,13 @@ export default function Analytics() {
       isHoliday: boolean;
     }[] = [];
 
+
     const cursor = new Date(start);
+
 
     while (cursor <= end) {
       const dayKey = cursor.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
 
       const completedForDay = activities.filter((a) => {
         const dateStr =
@@ -110,12 +124,15 @@ export default function Analytics() {
         return a.status === "completed" && dateStr === dayKey;
       }).length;
 
+
       const dayOfWeek = cursor.getDay(); // 0 - воскресенье, 6 - суббота
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const isHoliday = holidayDates.has(dayKey);
 
+
       const day = cursor.getDate().toString().padStart(2, "0");
       const month = (cursor.getMonth() + 1).toString().padStart(2, "0");
+
 
       days.push({
         label: `${day}.${month}`,
@@ -124,8 +141,10 @@ export default function Analytics() {
         isHoliday,
       });
 
+
       cursor.setDate(cursor.getDate() + 1);
     }
+
 
     return days;
   })();
@@ -143,7 +162,11 @@ console.log("ANALYTICS holidays", holidays);
           <h1 className="text-lg font-semibold">Аналитика</h1>
           <div></div>
         </div>
+
+
+        <UserProfile user={user} />
       </header>
+
 
       <div className="p-6">
         {/* Period Filters */}
@@ -166,6 +189,7 @@ console.log("ANALYTICS holidays", holidays);
             ))}
           </div>
         </div>
+
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4 mb-6">
@@ -209,6 +233,7 @@ console.log("ANALYTICS holidays", holidays);
           </div>
         </div>
 
+
         {/* Chart */}
         <div className="bg-muted rounded-lg p-6 mb-6">
           <h4 className="text-sm font-medium text-foreground mb-2">
@@ -231,12 +256,15 @@ console.log("ANALYTICS holidays", holidays);
     const { x, y, payload, index } = props;
     const item = chartData[index];
 
+
     const isWeekend = item?.isWeekend;
     const isHoliday = item?.isHoliday;
+
 
     let fill = "#6b7280"; // обычный серый (text-muted-foreground)
     if (isWeekend) fill = "#ef4444"; // выходной — красный
     if (isHoliday) fill = "#f97316"; // праздник — оранжевый
+
 
     return (
       <text
@@ -261,6 +289,7 @@ console.log("ANALYTICS holidays", holidays);
                       if (entry.isWeekend) color = "#EF4444"; // выходной — красный
                       if (entry.isHoliday) color = "#F97316"; // праздник — оранжевый
 
+
                       return <Cell key={index} fill={color} />;
                     })}
                     <LabelList
@@ -274,6 +303,7 @@ console.log("ANALYTICS holidays", holidays);
             </div>
           </div>
         </div>
+
 
         {/* Activity Types Breakdown */}
         <div className="space-y-3">
@@ -302,7 +332,8 @@ console.log("ANALYTICS holidays", holidays);
         </div>
       </div>
 
+
       <BottomNavigation />
     </div>
   );
-}
+} 

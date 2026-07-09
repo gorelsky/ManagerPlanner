@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { Clock, Calendar } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -193,7 +194,7 @@ const createActivityMutation = useMutation({
     });
     return;
   }
-  
+
     const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
 
@@ -281,64 +282,53 @@ const createActivityMutation = useMutation({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Время начала</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="time"
-                        {...field}
-                        value={field.value || ""}
-                        data-testid="input-start-time"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Время окончания</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="time"
-                        {...field}
-                        value={field.value || ""}
-                        data-testid="input-end-time"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="endDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Дата окончания</FormLabel>
-                  <FormControl>
-                    <DatePicker
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Выберите дату окончания"
-                      data-testid="input-end-date"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <FormField
+    control={form.control}
+    name="startTime"
+    render={({ field }) => (
+      <FormItem className="w-full">
+        <FormLabel>Время начала</FormLabel>
+        <FormControl>
+          <div className="relative">
+            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+            <Input
+              type="time"
+              {...field}
+              value={field.value || ""}
+              className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+              data-testid="input-start-time"
             />
+          </div>
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
 
+  <FormField
+    control={form.control}
+    name="endTime"
+    render={({ field }) => (
+      <FormItem className="w-full">
+        <FormLabel>Время окончания</FormLabel>
+        <FormControl>
+          <div className="relative">
+            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+            <Input
+              type="time"
+              {...field}
+              value={field.value || ""}
+              className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+              data-testid="input-end-time"
+            />
+          </div>
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    )}
+  />
+</div>
             {/* Город — только из зоны менеджера */}
             <FormField
               control={form.control}
