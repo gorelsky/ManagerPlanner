@@ -13,11 +13,49 @@ import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { useAuth } from "@/contexts/auth-context";
-import { employeeApi, userApi, activityApi, cityApi, holidaysApi } from "@/lib/api";
+import {
+  employeeApi,
+  userApi,
+  activityApi,
+  cityApi,
+  holidaysApi,
+} from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 
+type DayBucket = {
+  date: Date;
+  weekOfMonth: number;
+  activities: ActivityWithDetails[];
+};
+
+function getWeekOfMonth(date: Date) {
+  const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+  const offset = firstDay.getDay() || 7;
+  return Math.ceil((date.getDate() + offset - 1) / 7);
+}
+
+function isActivityPast(activity: ActivityWithDetails) {
+  const now = new Date();
+
+  const activityDate = new Date(activity.startDate);
+  activityDate.setHours(23, 59, 59, 999);
+
+  return activityDate < now;
+}
+
+function getDatesInRange(start: Date, end: Date): Date[] {
+  const dates: Date[] = [];
+  const current = new Date(start);
+
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+}
+
 export default function Admin() {
-  console.log("ADMIN PAGE RENDERED");
   const [csvData, setCsvData] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
@@ -26,16 +64,12 @@ export default function Admin() {
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
   const [isImportingManagers, setIsImportingManagers] = useState(false);
 
-  // состояние для импорта городов
   const [citiesCsv, setCitiesCsv] = useState("");
   const [isImportingCities, setIsImportingCities] = useState(false);
 
-  // состояние для импорта городов менеджеров
   const [managerCitiesCsv, setManagerCitiesCsv] = useState("");
-  const [isImportingManagerCities, setIsImportingManagerCities] =
-    useState(false);
+  const [isImportingManagerCities, setIsImportingManagerCities] = useState(false);
 
-  // состояние для импорта праздников
   const [holidaysCsv, setHolidaysCsv] = useState("");
   const [isImportingHolidays, setIsImportingHolidays] = useState(false);
 
@@ -43,7 +77,8 @@ export default function Admin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Только для админов
+  const [currentDate] = useState(() => new Date());
+
   if (user?.role !== "admin") {
     return (
       <div className="p-4 text-center">
@@ -73,6 +108,47 @@ export default function Admin() {
     queryKey: ["/api/activities/all"],
     queryFn: () => activityApi.getAllActivities(),
   });
+
+  const monthStart = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    1,
+  );
+  const monthEnd = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth() + 1,
+    0,
+  );
+
+  const allMonthDates = getDatesInRange(monthStart, monthEnd);
+
+  const dailyActivities: DayBucket[] = allMonthDates.map((date) => {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const activitiesForDay = allActivities.filter((activity) => {
+      const start = new Date(activity.startDate);
+      return start >= dayStart && start <= dayEnd;
+    });
+
+    return {
+      date,
+      weekOfMonth: getWeekOfMonth(date),
+      activities: activitiesForDay,
+    };
+  });
+
+  const weeksInMonth = dailyActivities.reduce<Record<number, DayBucket[]>>(
+    (acc, day) => {
+      if (!acc[day.weekOfMonth]) acc[day.weekOfMonth] = [];
+      acc[day.weekOfMonth].push(day);
+      return acc;
+    },
+    {},
+  );
 
   const importEmployeesMutation = useMutation({
     mutationFn: (data: string) => employeeApi.importEmployees(data),
@@ -133,6 +209,27 @@ export default function Admin() {
       });
     },
   });
+const updateActivityMutation = useMutation({
+  mutationFn: (payload: { id: string; data: Partial<ActivityWithDetails> }) =>
+    activityApi.updateActivity(payload.id, payload.data),
+  onSuccess: (updatedActivity) => {
+    queryClient.setQueryData(
+      ["/api/activities/all"],
+      (old: ActivityWithDetails[] | undefined) =>
+        (old ?? []).map((a) => (a.id === updatedActivity.id ? updatedActivity : a)),
+    );
+    toast({
+      title: "Активность изменена",
+    });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "Ошибка изменения активности",
+      description: error.message || "Не удалось изменить активность",
+      variant: "destructive",
+    });
+  },
+});
 
   const deleteActivityMutation = useMutation({
     mutationFn: (id: string) => activityApi.deleteActivity(id),
@@ -155,7 +252,6 @@ export default function Admin() {
     },
   });
 
-  // мутация для импорта городов
   const importCitiesMutation = useMutation({
     mutationFn: (data: string) => cityApi.importCities(data),
     onSuccess: (result) => {
@@ -177,7 +273,6 @@ export default function Admin() {
     },
   });
 
-  // мутация для импорта городов менеджеров
   const importManagerCitiesMutation = useMutation({
     mutationFn: (data: string) => cityApi.importManagerCities(data),
     onSuccess: (result) => {
@@ -237,7 +332,6 @@ export default function Admin() {
     }
   };
 
-  // обработчик импорта городов
   const handleImportCities = () => {
     if (!citiesCsv.trim()) {
       toast({
@@ -251,7 +345,6 @@ export default function Admin() {
     importCitiesMutation.mutate(citiesCsv);
   };
 
-  // обработчик импорта городов менеджеров
   const handleImportManagerCities = () => {
     if (!managerCitiesCsv.trim()) {
       toast({
@@ -265,7 +358,6 @@ export default function Admin() {
     importManagerCitiesMutation.mutate(managerCitiesCsv);
   };
 
-  // обработчик импорта праздников
   const handleImportHolidays = async () => {
     if (!holidaysCsv.trim()) {
       toast({
@@ -308,7 +400,6 @@ export default function Admin() {
 
   return (
     <div className="pb-20">
-      {/* Header */}
       <header className="bg-blue-header text-white px-4 py-4">
         <div className="flex items-center justify-between mb-4">
           <SideMenu />
@@ -323,7 +414,6 @@ export default function Admin() {
       </header>
 
       <div className="p-4">
-        {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <Card>
             <CardContent className="p-4">
@@ -350,7 +440,6 @@ export default function Admin() {
           </Card>
         </div>
 
-        {/* Import Employees Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -364,7 +453,6 @@ export default function Admin() {
                 variant="outline"
                 onClick={downloadTemplate}
                 className="flex items-center space-x-2"
-                data-testid="button-download-template"
               >
                 <Download className="w-4 h-4" />
                 <span>Скачать шаблон</span>
@@ -382,7 +470,6 @@ export default function Admin() {
                 onChange={(e) => setCsvData(e.target.value)}
                 rows={6}
                 className="mt-1"
-                data-testid="textarea-csv-data"
               />
             </div>
 
@@ -390,14 +477,12 @@ export default function Admin() {
               onClick={handleImport}
               disabled={isImporting || !csvData.trim()}
               className="w-full"
-              data-testid="button-import"
             >
               {isImporting ? "Импортирую..." : "Импортировать МП"}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Import Cities Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -425,14 +510,11 @@ export default function Admin() {
               disabled={isImportingCities || !citiesCsv.trim()}
               className="w-full"
             >
-              {isImportingCities
-                ? "Импортирую города..."
-                : "Импортировать города"}
+              {isImportingCities ? "Импортирую города..." : "Импортировать города"}
             </Button>
           </CardContent>
         </Card>
 
-        {/* Import Manager Cities Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -457,9 +539,7 @@ export default function Admin() {
 
             <Button
               onClick={handleImportManagerCities}
-              disabled={
-                isImportingManagerCities || !managerCitiesCsv.trim()
-              }
+              disabled={isImportingManagerCities || !managerCitiesCsv.trim()}
               className="w-full"
             >
               {isImportingManagerCities
@@ -469,7 +549,6 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* Import Holidays Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -504,7 +583,6 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* Managers Import Section */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -534,9 +612,7 @@ export default function Admin() {
                 id="manager-file"
                 type="file"
                 accept=".csv,text/csv"
-                onChange={(e) =>
-                  setManagerFile(e.target.files?.[0] || null)
-                }
+                onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
               />
               <p className="text-xs text-muted-foreground">
                 Ожидаются колонки:
@@ -556,7 +632,6 @@ export default function Admin() {
           </CardContent>
         </Card>
 
-        {/* Managers List */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Менеджеры</CardTitle>
@@ -635,120 +710,166 @@ export default function Admin() {
         </div>
 
         {activeTab === "reps" && (
-          <>
-            {/* All Employees */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Все медицинские представители</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {employeesLoading ? (
-                  <div className="text-center py-4">Загрузка...</div>
-                ) : allEmployees.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      МП пока не загружены
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Используйте форму выше для массовой загрузки
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {allEmployees.map((employee: EmployeeWithDetails) => (
-                      <div
-                        key={employee.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-blue-600 font-semibold text-sm">
-                              {employee.firstName.charAt(0)}
-                              {employee.lastName.charAt(0)}
-                            </span>
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              {employee.lastName} {employee.firstName}{" "}
-                              {employee.middleName}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {employee.city?.name}
-                              {employee.city?.region
-                                ? ` (${employee.city.region})`
-                                : ""}{" "}
-                              •{" "}
-                              {employee.manager?.lastName}{" "}
-                              {employee.manager?.firstName}
-                            </p>
-                          </div>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Все медицинские представители</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {employeesLoading ? (
+                <div className="text-center py-4">Загрузка...</div>
+              ) : allEmployees.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    МП пока не загружены
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Используйте форму выше для массовой загрузки
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {allEmployees.map((employee: EmployeeWithDetails) => (
+                    <div
+                      key={employee.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 font-semibold text-sm">
+                            {employee.firstName.charAt(0)}
+                            {employee.lastName.charAt(0)}
+                          </span>
                         </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {employee.position}
-                        </Badge>
+                        <div>
+                          <p className="font-medium">
+                            {employee.lastName} {employee.firstName}{" "}
+                            {employee.middleName}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {employee.city?.name}
+                            {employee.city?.region
+                              ? ` (${employee.city.region})`
+                              : ""}{" "}
+                            • {employee.manager?.lastName}{" "}
+                            {employee.manager?.firstName}
+                          </p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
+                      <Badge variant="secondary" className="text-xs">
+                        {employee.position}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {activeTab === "plans" && (
-          <>
-            {/* All Activities */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Все активности</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activitiesLoading ? (
-                  <div className="text-center py-4">Загрузка...</div>
-                ) : allActivities.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">
-                    Активности пока не созданы
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {allActivities.map((activity: ActivityWithDetails) => (
-                      <div
-                        key={activity.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex flex-col">
-                          <p className="font-medium">
-                            {activity.type?.name} •{" "}
-                            {activity.employee?.lastName}{" "}
-                            {activity.employee?.firstName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {activity.city?.name} •{" "}
-                            {new Date(
-                              activity.startDate,
-                            ).toLocaleString()}{" "}
-                            —{" "}
-                            {new Date(activity.endDate).toLocaleString()} •{" "}
-                            {activity.user?.lastName}{" "}
-                            {activity.user?.firstName}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            deleteActivityMutation.mutate(activity.id)
-                          }
-                        >
-                          Удалить
-                        </Button>
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Все активности за месяц</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activitiesLoading ? (
+                <div className="text-center py-4">Загрузка...</div>
+              ) : (
+                <div className="space-y-4">
+                  {Object.entries(weeksInMonth).map(([weekNumber, days]) => (
+                    <div key={weekNumber} className="space-y-2">
+                      <h2 className="text-base font-semibold">
+                        Неделя {weekNumber}
+                      </h2>
+
+                      <div className="space-y-2 pl-4 border-l border-muted">
+                        {days.map((day) => (
+                          <div
+                            key={day.date.toISOString()}
+                            className="space-y-2"
+                          >
+                            <h3 className="text-sm font-semibold text-muted-foreground">
+                              {day.date.toLocaleDateString("ru-RU", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                weekday: "short",
+                              })}
+                            </h3>
+
+                            {day.activities.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                Нет активностей
+                              </p>
+                            ) : (
+                              day.activities.map((activity) => {
+                                const isPast = isActivityPast(activity);
+
+                                return (
+                                  <div
+                                    key={activity.id}
+                                    className="flex items-center justify-between p-3 border rounded-lg"
+                                  >
+                                    <div className="flex flex-col">
+                                      <p className="font-medium">
+                                        {activity.type?.name} •{" "}
+                                        {activity.employee?.lastName}{" "}
+                                        {activity.employee?.firstName}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {activity.city?.name} •{" "}
+                                        {new Date(
+                                          activity.startDate,
+                                        ).toLocaleString()}{" "}
+                                        —{" "}
+                                        {new Date(
+                                          activity.endDate,
+                                        ).toLocaleString()}{" "}
+                                        • {activity.user?.lastName}{" "}
+                                        {activity.user?.firstName}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      {/* здесь можно будет добавить кнопку Редактировать */}
+                                      {/* <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isPast}
+                                        onClick={() => {
+                                          if (isPast) return;
+                                          openEdit(activity);
+                                        }}
+                                      >
+                                        Редактировать
+                                      </Button> */}
+
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isPast}
+                                        onClick={() => {
+                                          if (isPast) return;
+                                          deleteActivityMutation.mutate(
+                                            activity.id,
+                                          );
+                                        }}
+                                      >
+                                        Удалить
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <BottomNavigation />

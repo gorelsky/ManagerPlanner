@@ -87,25 +87,26 @@ export default function CreateActivityModal({
   );
 
   // Мутации: создание и обновление
-const createActivityMutation = useMutation({
-  mutationFn: activityApi.createActivity,
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
-    queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
-    toast({
-      title: "Успешно",
-      description: "Активность создана",
-    });
-    onOpenChange(false);
-  },
-  onError: (error: any) => {
-    toast({
-      title: "Ошибка",
-      description: error?.message || "Не удалось создать активность",
-      variant: "destructive",
-    });
-  },
-});
+  const createActivityMutation = useMutation({
+    mutationFn: activityApi.createActivity,
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
+  queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
+  queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+  toast({
+    title: "Успешно",
+    description: "Активность обновлена",
+  });
+  onOpenChange(false);
+},
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка",
+        description: error?.message || "Не удалось создать активность",
+        variant: "destructive",
+      });
+    },
+  });
 
   const updateActivityMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<InsertActivity> }) =>
@@ -186,14 +187,32 @@ const createActivityMutation = useMutation({
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
     // Валидация: конец не раньше начала
-  if (endDateTime.getTime() < startDateTime.getTime()) {
-    toast({
-      title: "Ошибка",
-      description: "Время окончания не может быть раньше времени начала",
-      variant: "destructive",
-    });
-    return;
-  }
+    if (endDateTime.getTime() < startDateTime.getTime()) {
+      toast({
+        title: "Ошибка",
+        description: "Время окончания не может быть раньше времени начала",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Запрещаем редактирование прошлых дней (по дате начала активности)
+    if (activityToEdit) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const activityStart = new Date(activityToEdit.startDate);
+      activityStart.setHours(0, 0, 0, 0);
+
+      if (activityStart < today) {
+        toast({
+          title: "Нельзя изменить",
+          description: "Нельзя изменять активности прошлых дней",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
@@ -282,53 +301,54 @@ const createActivityMutation = useMutation({
               )}
             />
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-  <FormField
-    control={form.control}
-    name="startTime"
-    render={({ field }) => (
-      <FormItem className="w-full">
-        <FormLabel>Время начала</FormLabel>
-        <FormControl>
-          <div className="relative">
-            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-            <Input
-              type="time"
-              {...field}
-              value={field.value || ""}
-              className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-              data-testid="input-start-time"
-            />
-          </div>
-        </FormControl>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormLabel>Время начала</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Input
+                          type="time"
+                          {...field}
+                          value={field.value || ""}
+                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          data-testid="input-start-time"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-  <FormField
-    control={form.control}
-    name="endTime"
-    render={({ field }) => (
-      <FormItem className="w-full">
-        <FormLabel>Время окончания</FormLabel>
-        <FormControl>
-          <div className="relative">
-            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-            <Input
-              type="time"
-              {...field}
-              value={field.value || ""}
-              className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-              data-testid="input-end-time"
-            />
-          </div>
-        </FormControl>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-</div>
+              <FormField
+                control={form.control}
+                name="endTime"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormLabel>Время окончания</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Input
+                          type="time"
+                          {...field}
+                          value={field.value || ""}
+                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          data-testid="input-end-time"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             {/* Город — только из зоны менеджера */}
             <FormField
               control={form.control}
@@ -356,41 +376,41 @@ const createActivityMutation = useMutation({
             />
 
             {selectedType?.requiresEmployee && (
-  <FormField
-    control={form.control}
-    name="employeeId"
-    render={({ field }) => (
-      <FormItem>
-        <FormLabel>Прикрепленный сотрудник</FormLabel>
-        <Select
-          onValueChange={field.onChange}
-          defaultValue={field.value || ""}
-          disabled={!selectedCityId}
-        >
-          <FormControl>
-            <SelectTrigger data-testid="select-employee">
-              <SelectValue
-                placeholder={
-                  selectedCityId
-                    ? "Выберите сотрудника"
-                    : "Сначала выберите город"
-                }
+              <FormField
+                control={form.control}
+                name="employeeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Прикрепленный сотрудник</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value || ""}
+                      disabled={!selectedCityId}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-employee">
+                          <SelectValue
+                            placeholder={
+                              selectedCityId
+                                ? "Выберите сотрудника"
+                                : "Сначала выберите город"
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {filteredEmployees.map((employee) => (
+                          <SelectItem key={employee.id} value={employee.id}>
+                            {employee.lastName} {employee.firstName} {employee.middleName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </SelectTrigger>
-          </FormControl>
-          <SelectContent>
-            {filteredEmployees.map((employee) => (
-              <SelectItem key={employee.id} value={employee.id}>
-                {employee.lastName} {employee.firstName} {employee.middleName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FormMessage />
-      </FormItem>
-    )}
-  />
-)}
+            )}
 
             <FormField
               control={form.control}

@@ -130,20 +130,22 @@ export const activityApi = {
     return apiRequest("GET", url).then((res) => res.json());
   },
 
-  getActivitiesByUser: (
-    userId: string,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<ActivityWithDetails[]> => {
-    const params = new URLSearchParams();
-    if (startDate) params.append("startDate", startDate.toISOString());
-    if (endDate) params.append("endDate", endDate.toISOString());
+getActivitiesByUser: async (
+  userId: string,
+  params?: { startDate?: string; endDate?: string },
+): Promise<ActivityWithDetails[]> => {
+  const search = new URLSearchParams();
+  if (params?.startDate) search.set("startDate", params.startDate);
+  if (params?.endDate) search.set("endDate", params.endDate);
 
-    const url = `/api/activities/user/${userId}${
-      params.toString() ? `?${params.toString()}` : ""
-    }`;
-    return apiRequest("GET", url).then((res) => res.json());
-  },
+  const url =
+    search.toString().length > 0
+      ? `/api/activities/user/${userId}?${search.toString()}`
+      : `/api/activities/user/${userId}`;
+
+  const res = await apiRequest("GET", url);
+  return res.json();
+},
 
   getActivity: (id: string): Promise<ActivityWithDetails> =>
     apiRequest("GET", `/api/activities/${id}`).then((res) => res.json()),

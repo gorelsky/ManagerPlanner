@@ -52,11 +52,20 @@ export default function Dashboard() {
   const endDate = endOfMonth(currentDate);
 
   // Список активностей (для режима "Список") — БЕЗ фильтра по месяцу
-  const { data: activities = [], isLoading } = useQuery({
-    queryKey: ["/api/activities/user", user?.id],
-    queryFn: () => activityApi.getActivitiesByUser(user!.id),
-    enabled: !!user?.id,
-  });
+const { data: activities = [], isLoading } = useQuery({
+  queryKey: [
+    "/api/activities/user",
+    user?.id,
+    startDate.toISOString(),
+    endDate.toISOString(),
+  ],
+  queryFn: () =>
+    activityApi.getActivitiesByUser(user!.id, {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    }),
+  enabled: !!user?.id,
+});
 
   // Календарная статистика (для режима "Календарь")
   const {
