@@ -26,19 +26,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Проверяем сохраненного пользователя при старте
-    const savedUser = localStorage.getItem("user");
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        setUser(user);
-      } catch (error) {
+useEffect(() => {
+  const savedUser = localStorage.getItem("user");
+  if (savedUser) {
+    try {
+      const parsed = JSON.parse(savedUser);
+
+      // Минимальная проверка структуры
+      if (parsed && parsed.id && parsed.username && parsed.role) {
+        setUser(parsed);
+      } else {
         localStorage.removeItem("user");
       }
+    } catch {
+      localStorage.removeItem("user");
     }
-    setIsLoading(false);
-  }, []);
+  }
+  setIsLoading(false);
+}, []);
 
   const login = (newUser: User) => {
     setUser(newUser);

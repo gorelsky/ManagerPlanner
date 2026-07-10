@@ -193,19 +193,19 @@ export const activityApi = {
     if (endDate) payload.endDate = endDate;
     if (status) payload.status = status;
 
-    const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
+  const res = await apiRequest("PATCH", `/api/activities/${id}/status`, { status });
 
-    if (!res.ok) {
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {}
+if (!res.ok) {
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {}
 
-      const serverMessage = data?.message;
-      throw new Error(serverMessage || "Не удалось обновить активность");
-    }
+  const serverMessage = data?.message;
+  throw new Error(serverMessage || "Не удалось обновить статус активности");
+}
 
-    return res.json();
+return res.json();
   },
 
   // Обновление статуса активности (выполнено / отменено и т.п.)

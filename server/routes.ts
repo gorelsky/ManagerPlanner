@@ -488,7 +488,7 @@ app.patch("/api/activities/:id/status", async (req, res) => {
     console.log("UPDATE STATUS REQUEST", { id, status });
 
     // 1. Получаем текущую активность
-    const existing = await storage.getActivityById(id);
+    const existing = await storage.getActivity(id);
 
     if (!existing) {
       return res.status(404).json({ message: "Activity not found" });
