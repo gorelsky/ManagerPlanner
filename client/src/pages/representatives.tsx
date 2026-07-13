@@ -46,13 +46,6 @@ export default function Representatives() {
       </header>
 
       <div className="p-4">
-        <div className="flex items-center justify-between mb-6">
-          <Button size="sm" data-testid="button-add-representative">
-            <Plus className="w-4 h-4 mr-1" />
-            Добавить
-          </Button>
-        </div>
-
         {representatives.length === 0 ? (
           <Card className="text-center py-8" data-testid="empty-representatives">
             <CardContent>
@@ -148,7 +141,7 @@ export default function Representatives() {
                         <div className="flex items-center space-x-2 text-muted-foreground">
                           <User className="w-4 h-4" />
                           <span>
-                            Менеджер: {rep.manager.lastName} {rep.manager.firstName}
+                            Менеджер: {rep.manager.lastName} {rep.manager.firstName} {rep.manager.middleName}
                           </span>
                         </div>
                       )}
