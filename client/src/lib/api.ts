@@ -166,49 +166,49 @@ getActivitiesByUser: async (
     return res.json();
   },
 
-  // Обновление активности (редактирование) — аккуратная версия
-  updateActivity: async (
-    id: string,
-    activity: Partial<InsertActivity>,
-  ): Promise<Activity> => {
-    const {
-      userId,
-      typeId,
-      cityId,
-      employeeId,
-      title,
-      description,
-      startDate,
-      endDate,
-      status,
-    } = activity;
+// Обновление активности (редактирование)
+updateActivity: async (
+  id: string,
+  activity: Partial<InsertActivity>,
+): Promise<Activity> => {
+  const {
+    userId,
+    typeId,
+    cityId,
+    employeeId,
+    title,
+    description,
+    startDate,
+    endDate,
+    status,
+  } = activity;
 
-    const payload: Record<string, unknown> = {};
+  const payload: Record<string, unknown> = {};
 
-    if (userId) payload.userId = userId;
-    if (typeId) payload.typeId = typeId;
-    if (cityId) payload.cityId = cityId;
-    if (employeeId !== undefined) payload.employeeId = employeeId;
-    if (title) payload.title = title;
-    if (description !== undefined) payload.description = description;
-    if (startDate) payload.startDate = startDate;
-    if (endDate) payload.endDate = endDate;
-    if (status) payload.status = status;
+  if (userId) payload.userId = userId;
+  if (typeId) payload.typeId = typeId;
+  if (cityId) payload.cityId = cityId;
+  if (employeeId !== undefined) payload.employeeId = employeeId;
+  if (title) payload.title = title;
+  if (description !== undefined) payload.description = description;
+  if (startDate) payload.startDate = startDate;
+  if (endDate) payload.endDate = endDate;
+  if (status) payload.status = status;
 
-  const res = await apiRequest("PATCH", `/api/activities/${id}/status`, { status });
+  const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
 
-if (!res.ok) {
-  let data: any = null;
-  try {
-    data = await res.json();
-  } catch {}
+  if (!res.ok) {
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {}
 
-  const serverMessage = data?.message;
-  throw new Error(serverMessage || "Не удалось обновить статус активности");
-}
+    const serverMessage = data?.message;
+    throw new Error(serverMessage || "Не удалось обновить активность");
+  }
 
-return res.json();
-  },
+  return res.json();
+},
 
   // Обновление статуса активности (выполнено / отменено и т.п.)
   updateActivityStatus: async (

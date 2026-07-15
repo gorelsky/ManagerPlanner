@@ -186,33 +186,31 @@ onSuccess: () => {
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
-    // Валидация: конец не раньше начала
-    if (endDateTime.getTime() < startDateTime.getTime()) {
-      toast({
-        title: "Ошибка",
-        description: "Время окончания не может быть раньше времени начала",
-        variant: "destructive",
-      });
-      return;
-    }
+// Валидация: конец не раньше начала
+if (endDateTime.getTime() < startDateTime.getTime()) {
+  toast({
+    title: "Ошибка",
+    description: "Время окончания не может быть раньше времени начала",
+    variant: "destructive",
+  });
+  return;
+}
 
-    // Запрещаем редактирование прошлых дней (по дате начала активности)
-    if (activityToEdit) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+// Запрещаем редактирование прошлых дней по выбранной дате в форме
+const today = new Date();
+today.setHours(0, 0, 0, 0);
 
-      const activityStart = new Date(activityToEdit.startDate);
-      activityStart.setHours(0, 0, 0, 0);
+const selectedStart = new Date(data.startDate);
+selectedStart.setHours(0, 0, 0, 0);
 
-      if (activityStart < today) {
-        toast({
-          title: "Нельзя изменить",
-          description: "Нельзя изменять активности прошлых дней",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
+if (activityToEdit && selectedStart < today) {
+  toast({
+    title: "Нельзя изменить",
+    description: "Нельзя изменять активности прошлых дней",
+    variant: "destructive",
+  });
+  return;
+}
 
     const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
