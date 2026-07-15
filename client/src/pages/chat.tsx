@@ -81,7 +81,7 @@ export default function Chat() {
 
     const message: InsertMessage = {
       senderId: user.id,
-      receiverId: null, // общий чат
+      receiverId: null,
       content: messageText.trim(),
     };
 
@@ -110,26 +110,26 @@ export default function Chat() {
     );
   }
 
-return (
-  <div className="min-h-screen bg-background">
-    <div className="max-w-sm mx-auto bg-card min-h-screen flex flex-col">
-      {/* Header */}
-      <div className="border-b border-border bg-blue-header text-white">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center space-x-3">
-            <SideMenu />
-            <div>
-              <h1 className="text-xl font-semibold">Чат</h1>
-              <p className="text-sm text-white/70">Общение с командой</p>
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center pb-16">
+      {/* Карточка чата, ограниченная по высоте, чтобы поле ввода было видно */}
+      <div className="w-full max-w-sm bg-card flex flex-col h-[calc(98vh-5rem)]">
+        {/* Header */}
+        <div className="border-b border-border bg-blue-header text-white">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center space-x-3">
+              <SideMenu />
+              <div>
+                <h1 className="text-xl font-semibold">Чат</h1>
+                <p className="text-sm text-white/70">Общение с командой</p>
+              </div>
             </div>
           </div>
+
+          {user && <UserProfile user={user} />}
         </div>
 
-        {/* Профиль текущего менеджера */}
-        {user && <UserProfile user={user} />}
-      </div>
-
-        {/* Messages */}
+        {/* Messages: прокручиваются только внутри этой области */}
         <ScrollArea className="flex-1 px-4">
           <div className="space-y-4 py-4">
             {messages.length === 0 ? (
@@ -150,7 +150,9 @@ return (
                 return (
                   <div
                     key={message.id}
-                    className={`flex ${isOwnMessage ? "justify-end" : "justify-start"} gap-2`}
+                    className={`flex ${
+                      isOwnMessage ? "justify-end" : "justify-start"
+                    } gap-2`}
                   >
                     {!isOwnMessage && (
                       <Avatar className="w-8 h-8 mt-1">
@@ -219,8 +221,8 @@ return (
           </div>
         </ScrollArea>
 
-        {/* Message Input */}
-        <div className="p-4 border-t border-border bg-card/95 backdrop-blur">
+        {/* Message Input: всегда видно, прямо над нижним краем карточки */}
+        <div className="p-4 border-t border-border bg-card">
           <div className="flex items-end space-x-2">
             <div className="flex-1">
               <Input
@@ -243,6 +245,7 @@ return (
         </div>
       </div>
 
+      {/* Фиксированный навбар поверх фона, но отделён от карточки чата */}
       <BottomNavigation />
     </div>
   );

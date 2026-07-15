@@ -8,53 +8,55 @@ export default function BottomNavigation() {
   const { user } = useAuth();
 
   const navItems = [
-    { 
-      path: "/", 
-      icon: PenTool, 
+    {
+      path: "/",
+      icon: PenTool,
       label: "Внесение",
-      testId: "nav-entry"
+      testId: "nav-entry",
     },
-    { 
-      path: "/reps", 
-      icon: Users, 
+    {
+      path: "/reps",
+      icon: Users,
       label: "МП",
-      testId: "nav-reps"
+      testId: "nav-reps",
     },
-    { 
-      path: "/analytics", 
-      icon: BarChart3, 
+    {
+      path: "/analytics",
+      icon: BarChart3,
       label: "Аналитика",
-      testId: "nav-analytics"
+      testId: "nav-analytics",
     },
-    { 
-      path: "/chat", 
-      icon: MessageCircle, 
+    {
+      path: "/chat",
+      icon: MessageCircle,
       label: "Чат",
-      testId: "nav-chat"
+      testId: "nav-chat",
     },
   ];
 
-  // Добавляем админскую панель только для админов
   if (user?.role === "admin") {
     navItems.push({
       path: "/admin",
       icon: Settings,
       label: "Админ",
-      testId: "nav-admin"
+      testId: "nav-admin",
     });
   }
 
   return (
-    <nav className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border" data-testid="bottom-navigation">
+    <nav
+      className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border"
+      data-testid="bottom-navigation"
+    >
       <div className="flex items-center justify-around py-2">
         {navItems.map(({ path, icon: Icon, label, testId }) => (
           <Link key={path} href={path}>
-            <button 
+            <button
               className={cn(
                 "flex flex-col items-center space-y-1 p-2 transition-colors",
-                location === path 
-                  ? "text-blue-600" 
-                  : "text-muted-foreground hover:text-foreground"
+                location === path
+                  ? "text-blue-600"
+                  : "text-muted-foreground hover:text-foreground",
               )}
               data-testid={testId}
             >

@@ -1,13 +1,29 @@
-import { 
-  users, cities, employees, activityTypes, activities, messages,
-  managerCities, holidays,
-  type User, type InsertUser,
-  type City, type InsertCity,
-  type Employee, type InsertEmployee, type EmployeeWithDetails,
-  type ActivityType, type InsertActivityType,
-  type Activity, type InsertActivity, type ActivityWithDetails,
-  type Message, type InsertMessage, type MessageWithDetails,
-  type Holiday, type InsertHoliday,
+import {
+  users,
+  cities,
+  employees,
+  activityTypes,
+  activities,
+  messages,
+  managerCities,
+  holidays,
+  type User,
+  type InsertUser,
+  type City,
+  type InsertCity,
+  type Employee,
+  type InsertEmployee,
+  type EmployeeWithDetails,
+  type ActivityType,
+  type InsertActivityType,
+  type Activity,
+  type InsertActivity,
+  type ActivityWithDetails,
+  type Message,
+  type InsertMessage,
+  type MessageWithDetails,
+  type Holiday,
+  type InsertHoliday,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
@@ -43,7 +59,11 @@ export interface IStorage {
   initializeCities(): Promise<void>;
 
   // Activities
-  getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
+  getActivitiesByUser(
+    userId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<ActivityWithDetails[]>;
   getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]>;
   getActivity(id: string): Promise<ActivityWithDetails | undefined>;
   createActivity(activity: InsertActivity): Promise<Activity>;
@@ -67,7 +87,7 @@ export interface IStorage {
 
   // Messages
   getMessages(userId: string): Promise<MessageWithDetails[]>;
-  createMessage(message: InsertMessage): Promise<Message>;
+  createMessage(message: InsertMessage): Promise<MessageWithDetails>;
   markMessageAsRead(messageId: string): Promise<void>;
 }
 
@@ -85,10 +105,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
@@ -113,7 +130,6 @@ export class DatabaseStorage implements IStorage {
     return city;
   }
 
-  // импорт городов из CSV (name,region?)
   async importCities(csvData: string): Promise<{ imported: number }> {
     const lines = csvData.trim().split("\n");
     if (lines.length < 2) {
@@ -163,7 +179,6 @@ export class DatabaseStorage implements IStorage {
     return rows.map((row) => row.city);
   }
 
-  // CSV: managerEmail,city
   async importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }> {
     const lines = csvData.trim().split("\n");
     if (lines.length < 2) {
@@ -173,11 +188,7 @@ export class DatabaseStorage implements IStorage {
     const headers = lines[0].split(",").map((h) => h.trim());
     let imported = 0;
 
-    const allManagers = await db
-      .select()
-      .from(users)
-      .where(eq(users.role, "manager"));
-
+    const allManagers = await db.select().from(users).where(eq(users.role, "manager"));
     const allCities = await db.select().from(cities);
 
     for (let i = 1; i < lines.length; i++) {
@@ -257,8 +268,8 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(cities, eq(employees.cityId, cities.id))
       .where(eq(employees.managerId, managerId))
       .orderBy(asc(employees.lastName));
-    
-    return result.map(row => ({
+
+    return result.map((row) => ({
       ...row,
       manager: row.manager || undefined,
       city: row.city || undefined,
@@ -285,8 +296,8 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(employees.managerId, users.id))
       .leftJoin(cities, eq(employees.cityId, cities.id))
       .orderBy(asc(employees.lastName));
-    
-    return result.map(row => ({
+
+    return result.map((row) => ({
       ...row,
       manager: row.manager || undefined,
       city: row.city || undefined,
@@ -294,15 +305,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async importEmployees(csvData: string): Promise<{ imported: number }> {
-    const lines = csvData.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
+    const lines = csvData.trim().split("\n");
+    const headers = lines[0].split(",").map((h) => h.trim());
     let imported = 0;
 
     const allCities = await this.getCities();
     const allManagers = await this.getManagersList();
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
+      const values = lines[i].split(",").map((v) => v.trim());
       if (values.length !== headers.length) continue;
 
       const employeeData: Record<string, string> = {};
@@ -310,8 +321,8 @@ export class DatabaseStorage implements IStorage {
         employeeData[header] = values[index];
       });
 
-      const city = allCities.find(c => c.name === employeeData.city);
-      const manager = allManagers.find(m => m.username === employeeData.manager);
+      const city = allCities.find((c) => c.name === employeeData.city);
+      const manager = allManagers.find((m) => m.username === employeeData.manager);
 
       if (!city || !manager) continue;
 
@@ -329,14 +340,17 @@ export class DatabaseStorage implements IStorage {
         });
         imported++;
       } catch (error) {
-        console.error('Error importing employee:', error);
+        console.error("Error importing employee:", error);
       }
     }
 
     return { imported };
   }
 
-  async importUsersFromCsv(csvData: string, role: "manager" | "admin" = "manager"): Promise<{ imported: number }> {
+  async importUsersFromCsv(
+    csvData: string,
+    role: "manager" | "admin" = "manager",
+  ): Promise<{ imported: number }> {
     const lines = csvData.trim().split("\n");
     const headers = lines[0].split(",").map((h) => h.trim());
     let imported = 0;
@@ -350,7 +364,12 @@ export class DatabaseStorage implements IStorage {
         userData[header] = values[index];
       });
 
-      if (!userData.username || !userData.password || !userData.firstName || !userData.lastName) {
+      if (
+        !userData.username ||
+        !userData.password ||
+        !userData.firstName ||
+        !userData.lastName
+      ) {
         continue;
       }
 
@@ -374,10 +393,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
-    const [employee] = await db
-      .insert(employees)
-      .values(insertEmployee)
-      .returning();
+    const [employee] = await db.insert(employees).values(insertEmployee).returning();
     return employee;
   }
 
@@ -427,9 +443,13 @@ export class DatabaseStorage implements IStorage {
 
   async initializeActivityTypes(): Promise<void> {
     const existingTypes = await this.getActivityTypes();
-    
+
     const defaultActivityTypes = [
-      { name: "Административная работа (проверка фин отчетов, собственная фин отчетность, работа с аналитикой и т.д.)", visitEquivalent: "2.0", requiresEmployee: false },
+      {
+        name: "Административная работа (проверка фин отчетов, собственная фин отчетность, работа с аналитикой и т.д.)",
+        visitEquivalent: "2.0",
+        requiresEmployee: false,
+      },
       { name: "Аудит визит", visitEquivalent: "1.5", requiresEmployee: true },
       { name: "Больничный", visitEquivalent: "14.0", requiresEmployee: false },
       { name: "Визит в офис АС", visitEquivalent: "3.0", requiresEmployee: false },
@@ -460,12 +480,17 @@ export class DatabaseStorage implements IStorage {
     ];
 
     for (const activityType of defaultActivityTypes) {
-      const exists = existingTypes.find(existing => existing.name === activityType.name);
+      const exists = existingTypes.find(
+        (existing) => existing.name === activityType.name,
+      );
       if (!exists) {
         try {
           await this.createActivityType(activityType as any);
         } catch (error) {
-          console.error(`Error creating activity type "${activityType.name}":`, error);
+          console.error(
+            `Error creating activity type "${activityType.name}":`,
+            error,
+          );
         }
       }
     }
@@ -473,287 +498,301 @@ export class DatabaseStorage implements IStorage {
     console.log(`Activity types initialized. Total: ${defaultActivityTypes.length}`);
   }
 
-/* === Activities === */
+  /* === Activities === */
 
-async getActivitiesByUser(userId: string, startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
-  const conditions: any[] = [eq(activities.userId, userId)];
-  if (startDate) conditions.push(gte(activities.startDate, startDate));
-  if (endDate) conditions.push(lte(activities.endDate, endDate));
-  return this.queryActivities(conditions);
-}
+  async getActivitiesByUser(
+    userId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<ActivityWithDetails[]> {
+    const conditions: any[] = [eq(activities.userId, userId)];
+    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (endDate) conditions.push(lte(activities.endDate, endDate));
+    return this.queryActivities(conditions);
+  }
 
-async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
-  const conditions: any[] = [];
-  if (startDate) conditions.push(gte(activities.startDate, startDate));
-  if (endDate) conditions.push(lte(activities.endDate, endDate));
-  return this.queryActivities(conditions);
-}
+  async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
+    const conditions: any[] = [];
+    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (endDate) conditions.push(lte(activities.endDate, endDate));
+    return this.queryActivities(conditions);
+  }
 
-// Календарная статистика активностей по дням для конкретного пользователя
-async getActivityCalendarStatsByUser(
-  userId: string,
-  startDate: Date,
-  endDate: Date,
-): Promise<
-  Array<{
-    date: string;
-    planned: number;
-    inProgress: number;
-    completed: number;
-    cancelled: number;
-    rescheduled: number;
-  }>
-> {
-  const rows = await db
-    .select({
-      date: sql`date_trunc('day', ${activities.startDate})`.as("date"),
-      planned: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'planned')`.as("planned"),
-      inProgress: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'in_progress')`.as("in_progress"),
-      completed: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'completed')`.as("completed"),
-      cancelled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'cancelled')`.as("cancelled"),
-      rescheduled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'rescheduled')`.as("rescheduled"),
-    })
-    .from(activities)
-    .where(
-      and(
-        eq(activities.userId, userId),
-        gte(activities.startDate, startDate),
-        lte(activities.startDate, endDate),
-      ),
-    )
-    .groupBy(sql`date_trunc('day', ${activities.startDate})`)
-    .orderBy(sql`date_trunc('day', ${activities.startDate})`);
+  async getActivityCalendarStatsByUser(
+    userId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<
+    Array<{
+      date: string;
+      planned: number;
+      inProgress: number;
+      completed: number;
+      cancelled: number;
+      rescheduled: number;
+    }>
+  > {
+    const rows = await db
+      .select({
+        date: sql`date_trunc('day', ${activities.startDate})`.as("date"),
+        planned: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'planned')`.as("planned"),
+        inProgress: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'in_progress')`.as(
+          "in_progress",
+        ),
+        completed: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'completed')`.as(
+          "completed",
+        ),
+        cancelled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'cancelled')`.as(
+          "cancelled",
+        ),
+        rescheduled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'rescheduled')`.as(
+          "rescheduled",
+        ),
+      })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.userId, userId),
+          gte(activities.startDate, startDate),
+          lte(activities.startDate, endDate),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${activities.startDate})`)
+      .orderBy(sql`date_trunc('day', ${activities.startDate})`);
 
-  return rows.map((r: any) => {
-    const rawDate = r.date;
+    return rows.map((r: any) => {
+      const rawDate = r.date;
 
-    let dateStr: string;
-    if (rawDate instanceof Date) {
-      dateStr = rawDate.toISOString().slice(0, 10);
-    } else {
-      dateStr = String(rawDate).slice(0, 10);
+      let dateStr: string;
+      if (rawDate instanceof Date) {
+        dateStr = rawDate.toISOString().slice(0, 10);
+      } else {
+        dateStr = String(rawDate).slice(0, 10);
+      }
+
+      return {
+        date: dateStr,
+        planned: Number(r.planned ?? 0),
+        inProgress: Number(r.inProgress ?? 0),
+        completed: Number(r.completed ?? 0),
+        cancelled: Number(r.cancelled ?? 0),
+        rescheduled: Number(r.rescheduled ?? 0),
+      };
+    });
+  }
+
+  private async hasOverlappingActivities(
+    userId: string,
+    employeeId: string | null | undefined,
+    cityId: string,
+    startDate: Date,
+    endDate: Date,
+    excludeActivityId?: string,
+  ): Promise<boolean> {
+    console.log("hasOverlappingActivities FUNCTION BODY START");
+    const conditions: any[] = [
+      eq(activities.userId, userId),
+      sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
+    ];
+
+    if (excludeActivityId) {
+      conditions.push(sql`${activities.id} <> ${excludeActivityId}`);
     }
 
+    const rows = await db
+      .select({
+        id: activities.id,
+        start: activities.startDate,
+        end: activities.endDate,
+        typeId: activities.typeId,
+        employeeId: activities.employeeId,
+        cityId: activities.cityId,
+      })
+      .from(activities)
+      .where(and(...conditions));
+
+    console.log("hasOverlappingActivities CHECK:", {
+      userId,
+      employeeId,
+      cityId,
+      startDate,
+      endDate,
+      excludeActivityId,
+    });
+    console.log("hasOverlappingActivities rows:", rows);
+
+    return rows.length > 0;
+  }
+
+  private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
+    const result = await db
+      .select({
+        id: activities.id,
+        userId: activities.userId,
+        typeId: activities.typeId,
+        cityId: activities.cityId,
+        employeeId: activities.employeeId,
+        title: activities.title,
+        description: activities.description,
+        startDate: activities.startDate,
+        endDate: activities.endDate,
+        status: activities.status,
+        createdAt: activities.createdAt,
+        updatedAt: activities.updatedAt,
+        type: activityTypes,
+        city: cities,
+        employee: employees,
+        managerFirstName: users.firstName,
+        managerLastName: users.lastName,
+        managerUsername: users.username,
+      })
+      .from(activities)
+      .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
+      .leftJoin(cities, eq(activities.cityId, cities.id))
+      .leftJoin(employees, eq(activities.employeeId, employees.id))
+      .leftJoin(users, eq(activities.userId, users.id))
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(asc(activities.startDate));
+
+    return result.map((row) => ({
+      ...row,
+      type: row.type!,
+      city: row.city!,
+      employee: row.employee || undefined,
+      managerName:
+        `${row.managerFirstName || ""} ${row.managerLastName || ""}`.trim() ||
+        row.managerUsername ||
+        "",
+    }));
+  }
+
+  async getActivity(id: string): Promise<ActivityWithDetails | undefined> {
+    const [result] = await db
+      .select({
+        id: activities.id,
+        userId: activities.userId,
+        typeId: activities.typeId,
+        cityId: activities.cityId,
+        employeeId: activities.employeeId,
+        title: activities.title,
+        description: activities.description,
+        startDate: activities.startDate,
+        endDate: activities.endDate,
+        status: activities.status,
+        createdAt: activities.createdAt,
+        updatedAt: activities.updatedAt,
+        type: activityTypes,
+        city: cities,
+        employee: employees,
+      })
+      .from(activities)
+      .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
+      .leftJoin(cities, eq(activities.cityId, cities.id))
+      .leftJoin(employees, eq(activities.employeeId, employees.id))
+      .where(eq(activities.id, id));
+
+    if (!result) return undefined;
+
     return {
-      date: dateStr,
-      planned: Number(r.planned ?? 0),
-      inProgress: Number(r.inProgress ?? 0),
-      completed: Number(r.completed ?? 0),
-      cancelled: Number(r.cancelled ?? 0),
-      rescheduled: Number(r.rescheduled ?? 0),
+      ...result,
+      type: result.type!,
+      city: result.city!,
+      employee: result.employee || undefined,
     };
-  });
-}
-
-// Проверка пересечения интервалов активностей
-// Логика: для ОДНОГО пользователя, сотрудника и города не может быть двух активностей,
-// которые пересекаются по времени: A.start < B.end AND B.start < A.end
-private async hasOverlappingActivities(
-  userId: string,
-  employeeId: string | null | undefined,
-  cityId: string,
-  startDate: Date,
-  endDate: Date,
-  excludeActivityId?: string,
-): Promise<boolean> {
-  console.log("hasOverlappingActivities FUNCTION BODY START");
-  const conditions: any[] = [
-    eq(activities.userId, userId),
-    // временно убираем фильтр по сотруднику и городу
-    sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
-  ];
-
-  if (excludeActivityId) {
-    conditions.push(sql`${activities.id} <> ${excludeActivityId}`);
   }
 
-  const rows = await db
-    .select({
-      id: activities.id,
-      start: activities.startDate,
-      end: activities.endDate,
-      typeId: activities.typeId,
-      employeeId: activities.employeeId,
-      cityId: activities.cityId,
-    })
-    .from(activities)
-    .where(and(...conditions));
+  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
+    const { userId, employeeId, cityId, startDate, endDate } = insertActivity;
 
-  console.log("hasOverlappingActivities CHECK:", {
-    userId,
-    employeeId,
-    cityId,
-    startDate,
-    endDate,
-    excludeActivityId,
-  });
-  console.log("hasOverlappingActivities rows:", rows);
+    if (!startDate || !endDate) {
+      throw new Error("startDate and endDate are required");
+    }
 
-  return rows.length > 0;
-}
+    if (startDate >= endDate) {
+      throw new Error("Дата окончания должна быть позже даты начала");
+    }
 
-private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
-  const result = await db
-    .select({
-      id: activities.id,
-      userId: activities.userId,
-      typeId: activities.typeId,
-      cityId: activities.cityId,
-      employeeId: activities.employeeId,
-      title: activities.title,
-      description: activities.description,
-      startDate: activities.startDate,
-      endDate: activities.endDate,
-      status: activities.status,
-      createdAt: activities.createdAt,
-      updatedAt: activities.updatedAt,
-      type: activityTypes,
-      city: cities,
-      employee: employees,
-      managerFirstName: users.firstName,
-      managerLastName: users.lastName,
-      managerUsername: users.username,
-    })
-    .from(activities)
-    .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
-    .leftJoin(cities, eq(activities.cityId, cities.id))
-    .leftJoin(employees, eq(activities.employeeId, employees.id))
-    .leftJoin(users, eq(activities.userId, users.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(asc(activities.startDate));
+    console.log("CREATE ACTIVITY CHECK OVERLAP:", {
+      userId,
+      employeeId,
+      cityId,
+      startDate,
+      endDate,
+    });
 
-  return result.map(row => ({
-    ...row,
-    type: row.type!,
-    city: row.city!,
-    employee: row.employee || undefined,
-    managerName: `${row.managerFirstName || ""} ${row.managerLastName || ""}`.trim() || row.managerUsername || "",
-  }));
-}
+    const hasOverlap = await this.hasOverlappingActivities(
+      userId,
+      employeeId ?? null,
+      cityId,
+      startDate,
+      endDate,
+    );
 
-async getActivity(id: string): Promise<ActivityWithDetails | undefined> {
-  const [result] = await db
-    .select({
-      id: activities.id,
-      userId: activities.userId,
-      typeId: activities.typeId,
-      cityId: activities.cityId,
-      employeeId: activities.employeeId,
-      title: activities.title,
-      description: activities.description,
-      startDate: activities.startDate,
-      endDate: activities.endDate,
-      status: activities.status,
-      createdAt: activities.createdAt,
-      updatedAt: activities.updatedAt,
-      type: activityTypes,
-      city: cities,
-      employee: employees,
-    })
-    .from(activities)
-    .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
-    .leftJoin(cities, eq(activities.cityId, cities.id))
-    .leftJoin(employees, eq(activities.employeeId, employees.id))
-    .where(eq(activities.id, id));
+    if (hasOverlap) {
+      throw new Error("Пересечение по времени. Повторите планирование");
+    }
 
-  if (!result) return undefined;
-
-  return {
-    ...result,
-    type: result.type!,
-    city: result.city!,
-    employee: result.employee || undefined,
-  };
-}
-
-async createActivity(insertActivity: InsertActivity): Promise<Activity> {
-  const { userId, employeeId, cityId, startDate, endDate } = insertActivity;
-
-  if (!startDate || !endDate) {
-    throw new Error("startDate and endDate are required");
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        ...insertActivity,
+        updatedAt: new Date(),
+      })
+      .returning();
+    return activity;
   }
 
-  if (startDate >= endDate) {
-    throw new Error("Дата окончания должна быть позже даты начала");
+  async deleteActivity(id: string): Promise<void> {
+    await db.delete(activities).where(eq(activities.id, id));
   }
 
-  console.log("CREATE ACTIVITY CHECK OVERLAP:", {
-    userId,
-    employeeId,
-    cityId,
-    startDate,
-    endDate,
-  });
-
-  const hasOverlap = await this.hasOverlappingActivities(
-    userId,
-    employeeId ?? null,
-    cityId,
-    startDate,
-    endDate,
-  );
-
-  if (hasOverlap) {
-    throw new Error("Пересечение по времени. Повторите планирование");
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
-  const [activity] = await db
-    .insert(activities)
-    .values({
-      ...insertActivity,
-      updatedAt: new Date(),
-    })
-    .returning();
-  return activity;
-}
+  async updateActivity(
+    id: string,
+    updateActivity: Partial<InsertActivity>,
+  ): Promise<Activity> {
+    const current = await this.getActivity(id);
+    if (!current) {
+      throw new Error("Activity not found");
+    }
 
-async deleteActivity(id: string): Promise<void> {
-  await db.delete(activities).where(eq(activities.id, id));
-}
+    const newStart = updateActivity.startDate ?? current.startDate;
+    const newEnd = updateActivity.endDate ?? current.endDate;
+    const newEmployeeId = updateActivity.employeeId ?? current.employeeId;
+    const newCityId = updateActivity.cityId ?? current.cityId;
 
-async deleteUser(id: string): Promise<void> {
-  await db.delete(users).where(eq(users.id, id));
-}
+    if (newStart >= newEnd) {
+      throw new Error("Дата окончания должна быть позже даты начала");
+    }
 
-async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promise<Activity> {
-  const current = await this.getActivity(id);
-  if (!current) {
-    throw new Error("Activity not found");
+    const hasOverlap = await this.hasOverlappingActivities(
+      current.userId,
+      newEmployeeId ?? null,
+      newCityId,
+      newStart,
+      newEnd,
+      id,
+    );
+
+    if (hasOverlap) {
+      throw new Error("Пересечение по времени. Повторите планирование");
+    }
+
+    const [activity] = await db
+      .update(activities)
+      .set({
+        ...updateActivity,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, id))
+      .returning();
+
+    return activity;
   }
 
-  const newStart = updateActivity.startDate ?? current.startDate;
-  const newEnd = updateActivity.endDate ?? current.endDate;
-  const newEmployeeId = updateActivity.employeeId ?? current.employeeId;
-  const newCityId = updateActivity.cityId ?? current.cityId;
-
-  if (newStart >= newEnd) {
-    throw new Error("Дата окончания должна быть позже даты начала");
-  }
-
-  const hasOverlap = await this.hasOverlappingActivities(
-    current.userId,
-    newEmployeeId ?? null,
-    newCityId,
-    newStart,
-    newEnd,
-    id, // исключаем саму себя
-  );
-
-  if (hasOverlap) {
-    throw new Error("Пересечение по времени. Повторите планирование");
-  }
-
-  const [activity] = await db
-    .update(activities)
-    .set({
-      ...updateActivity,
-      updatedAt: new Date(),
-    })
-    .where(eq(activities.id, id))
-    .returning();
-
-  return activity;
-}
   async updateActivityStatus(id: string, status: string): Promise<Activity> {
     const [activity] = await db
       .update(activities)
@@ -770,6 +809,7 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
 
     return activity;
   }
+
   /* === Messages === */
 
   async getMessages(userId: string): Promise<MessageWithDetails[]> {
@@ -789,7 +829,7 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
           middleName: users.middleName,
           profileImage: users.profileImage,
           role: users.role,
-          password: users.password,
+          cityId: users.cityId,
           createdAt: users.createdAt,
         },
       })
@@ -799,45 +839,53 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
         or(
           eq(messages.senderId, userId),
           eq(messages.receiverId, userId),
-          isNull(messages.receiverId)
-        )
+          isNull(messages.receiverId),
+        ),
       )
       .orderBy(desc(messages.createdAt));
 
-    const messagesWithDetails: MessageWithDetails[] = [];
-    
-    for (const row of result) {
-      let receiver: any = undefined;
-      
-      if (row.receiverId) {
-        const [receiverData] = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, row.receiverId));
-        receiver = receiverData;
-      }
-
-      messagesWithDetails.push({
-        id: row.id,
-        senderId: row.senderId,
-        receiverId: row.receiverId,
-        content: row.content,
-        isRead: row.isRead,
-        createdAt: row.createdAt,
-        sender: row.sender,
-        receiver,
-      });
-    }
+    const messagesWithDetails: MessageWithDetails[] = result.map((row) => ({
+      id: row.id,
+      senderId: row.senderId,
+      receiverId: row.receiverId,
+      content: row.content,
+      isRead: row.isRead,
+      createdAt: row.createdAt,
+      sender: row.sender,
+      receiver: undefined,
+    }));
 
     return messagesWithDetails;
   }
 
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db
-      .insert(messages)
-      .values(insertMessage)
-      .returning();
-    return message;
+  async createMessage(insertMessage: InsertMessage): Promise<MessageWithDetails> {
+    const [message] = await db.insert(messages).values(insertMessage).returning();
+
+    const [sender] = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        middleName: users.middleName,
+        profileImage: users.profileImage,
+        role: users.role,
+        cityId: users.cityId,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, message.senderId));
+
+    return {
+      id: message.id,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      content: message.content,
+      isRead: message.isRead,
+      createdAt: message.createdAt,
+      sender,
+      receiver: undefined,
+    };
   }
 
   async markMessageAsRead(messageId: string): Promise<void> {
@@ -846,6 +894,7 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
       .set({ isRead: true })
       .where(eq(messages.id, messageId));
   }
+
   /* === Holidays === */
 
   async getHolidaysByYear(year: number): Promise<Holiday[]> {
@@ -865,14 +914,10 @@ async updateActivity(id: string, updateActivity: Partial<InsertActivity>): Promi
   }
 
   async createHoliday(insertHoliday: InsertHoliday): Promise<Holiday> {
-    const [row] = await db
-      .insert(holidays)
-      .values(insertHoliday)
-      .returning();
+    const [row] = await db.insert(holidays).values(insertHoliday).returning();
     return row;
   }
 
-  // Импорт праздников из CSV формата: date,name (date = YYYY-MM-DD)
   async importHolidaysFromCsv(csvData: string): Promise<{ imported: number }> {
     const lines = csvData.trim().split("\n");
     if (lines.length < 2) {

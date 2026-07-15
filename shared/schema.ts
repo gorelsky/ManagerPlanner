@@ -22,7 +22,6 @@ export const users = pgTable("users", {
   middleName: text("middle_name"),
   profileImage: text("profile_image"),
   role: text("role").notNull().default("manager"), // manager, admin
-  // базовый город менеджера (опционально, можно использовать позже)
   cityId: varchar("city_id").references(() => cities.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -30,7 +29,7 @@ export const users = pgTable("users", {
 export const cities = pgTable("cities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
-  region: text("region"), // можно оставить nullable
+  region: text("region"),
 });
 
 export const employees = pgTable("employees", {
@@ -104,12 +103,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   employees: many(employees),
   sentMessages: many(messages, { relationName: "sender" }),
   receivedMessages: many(messages, { relationName: "receiver" }),
-  // базовый город пользователя (если используешь)
   city: one(cities, {
     fields: [users.cityId],
     references: [cities.id],
   }),
-  // города зоны менеджера
   managerCities: many(managerCities),
 }));
 
@@ -176,7 +173,8 @@ export const managerCitiesRelations = relations(managerCities, ({ one }) => ({
   }),
 }));
 
-export const holidaysRelations = relations(holidays, ({}) => ({}));
+// для holidays у тебя сейчас нет реальных связей — можно оставить пустую декларацию
+export const holidaysRelations = relations(holidays, () => ({}));
 
 /* === Insert schemas === */
 
