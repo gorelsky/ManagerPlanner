@@ -532,68 +532,105 @@ async getActivitiesByUser(
     return this.queryActivities(conditions);
   }
 
-  async getActivityCalendarStatsByUser(
-    userId: string,
-    startDate: Date,
-    endDate: Date,
-  ): Promise<
-    Array<{
-      date: string;
-      planned: number;
-      inProgress: number;
-      completed: number;
-      cancelled: number;
-      rescheduled: number;
-    }>
-  > {
-    const rows = await db
-      .select({
-        date: sql`date_trunc('day', ${activities.startDate})`.as("date"),
-        planned: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'planned')`.as("planned"),
-        inProgress: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'in_progress')`.as(
-          "in_progress",
-        ),
-        completed: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'completed')`.as(
-          "completed",
-        ),
-        cancelled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'cancelled')`.as(
-          "cancelled",
-        ),
-        rescheduled: sql<number>`COUNT(*) FILTER (WHERE ${activities.status} = 'rescheduled')`.as(
-          "rescheduled",
-        ),
-      })
-      .from(activities)
-      .where(
-        and(
-          eq(activities.userId, userId),
-          gte(activities.startDate, startDate),
-          lte(activities.startDate, endDate),
-        ),
-      )
-      .groupBy(sql`date_trunc('day', ${activities.startDate})`)
-      .orderBy(sql`date_trunc('day', ${activities.startDate})`);
+async getActivityCalendarStatsByUser(
+  userId: string,
+  startDate: Date,
+  endDate: Date,
+): Promise<
+  Array<{
+    date: string;
+    planned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    rescheduled: number;
+  }>
+> {
+  // 1. Берём все активности пользователя, которые пересекаются с указанным периодом
+  const overlappingActivities = await db
+    .select({
+      startDate: activities.startDate,
+      endDate: activities.endDate,
+      status: activities.status,
+    })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.userId, userId),
+        // пересечение интервалов: activity.startDate < end AND start < activity.endDate
+        sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
+      ),
+    );
 
-    return rows.map((r: any) => {
-      const rawDate = r.date;
+  // 2. Проходим по каждому дню от startDate до endDate
+  const result: Array<{
+    date: string;
+    planned: number;
+    inProgress: number;
+    completed: number;
+    cancelled: number;
+    rescheduled: number;
+  }> = [];
 
-      let dateStr: string;
-      if (rawDate instanceof Date) {
-        dateStr = rawDate.toISOString().slice(0, 10);
-      } else {
-        dateStr = String(rawDate).slice(0, 10);
+  const current = new Date(startDate);
+  current.setHours(0, 0, 0, 0);
+
+  const periodEnd = new Date(endDate);
+  periodEnd.setHours(23, 59, 59, 999);
+
+  while (current <= periodEnd) {
+    const dayStart = new Date(current);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const dayEnd = new Date(current);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    let planned = 0;
+    let inProgress = 0;
+    let completed = 0;
+    let cancelled = 0;
+    let rescheduled = 0;
+
+    // 3. Для текущего дня считаем, какие активности его перекрывают
+    for (const activity of overlappingActivities) {
+      const aStart = activity.startDate;
+      const aEnd = activity.endDate;
+
+      if (aStart < dayEnd && aEnd >= dayStart) {
+        switch (activity.status) {
+          case "planned":
+            planned++;
+            break;
+          case "in_progress":
+            inProgress++;
+            break;
+          case "completed":
+            completed++;
+            break;
+          case "cancelled":
+            cancelled++;
+            break;
+          case "rescheduled":
+            rescheduled++;
+            break;
+        }
       }
+    }
 
-      return {
-        date: dateStr,
-        planned: Number(r.planned ?? 0),
-        inProgress: Number(r.inProgress ?? 0),
-        completed: Number(r.completed ?? 0),
-        cancelled: Number(r.cancelled ?? 0),
-        rescheduled: Number(r.rescheduled ?? 0),
-      };
+    result.push({
+      date: dayStart.toISOString().slice(0, 10), // YYYY-MM-DD
+      planned,
+      inProgress,
+      completed,
+      cancelled,
+      rescheduled,
     });
+
+    current.setDate(current.getDate() + 1);
   }
+
+  return result;
+}
 
   private async hasOverlappingActivities(
     userId: string,
