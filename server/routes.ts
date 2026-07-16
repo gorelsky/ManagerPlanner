@@ -11,6 +11,8 @@ import {
   insertMessageSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   try {
@@ -500,36 +502,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Messages
-  app.get("/api/messages/:userId", async (req, res) => {
-    try {
-      const userId = req.params.userId;
-      const messages = await storage.getMessages(userId);
-      res.json(messages);
-    } catch (error) {
-      console.error("GET /api/messages/:userId error", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+// Messages
+app.get("/api/messages/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const messages = await storage.getMessages(userId);
 
-  app.post("/api/messages", async (req, res) => {
-    try {
-      const messageData = insertMessageSchema.parse(req.body);
-      const message = await storage.createMessage(messageData);
-      res.status(201).json(message);
-    } catch (error) {
-      console.error("POST /api/messages error", error);
-      if (error instanceof z.ZodError) {
-        return res
-          .status(400)
-          .json({
-            message: "Invalid message data",
-            errors: error.errors,
-          });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+    // Здесь форматируем createdAt как московское локальное время в строку
+    const formatted = messages.map((message) => ({
+      ...message,
+      createdAt: message.createdAt
+        ? format(message.createdAt, "отправлено dd.MM.yyyy в HH:mm", { locale: ru })
+        : null,
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error("GET /api/messages/:userId error", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
   app.patch("/api/messages/:messageId/read", async (req, res) => {
     try {

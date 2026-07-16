@@ -80,7 +80,7 @@ export const messages = pgTable("messages", {
   receiverId: varchar("receiver_id").references(() => users.id), // null для общего чата
   content: text("content").notNull(),
   isRead: boolean("is_read").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
 });
 
 export const holidays = pgTable("holidays", {

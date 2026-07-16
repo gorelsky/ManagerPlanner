@@ -188,18 +188,12 @@ export default function Chat() {
                           {message.content}
                         </p>
                         <p
-                          className={`text-xs mt-1 ${
-                            isOwnMessage ? "text-blue-100" : "text-muted-foreground"
-                          }`}
-                        >
-                          {message.createdAt
-                            ? format(
-                                new Date(message.createdAt),
-                                "HH:mm",
-                                { locale: ru },
-                              )
-                            : ""}
-                        </p>
+  className={`text-xs mt-1 ${
+    isOwnMessage ? "text-blue-100" : "text-muted-foreground"
+  }`}
+>
+  {message.createdAt ?? ""}
+</p>
                       </div>
                     </div>
 

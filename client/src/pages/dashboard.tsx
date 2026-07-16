@@ -47,25 +47,25 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Эти даты оставляем для календарной статистики, но НЕ режем ими список
+  // Даты для календарной статистики (месяц)
   const startDate = startOfMonth(currentDate);
   const endDate = endOfMonth(currentDate);
 
-  // Список активностей (для режима "Список") — БЕЗ фильтра по месяцу
-const { data: activities = [], isLoading } = useQuery({
-  queryKey: [
-    "/api/activities/user",
-    user?.id,
-    startDate.toISOString(),
-    endDate.toISOString(),
-  ],
-  queryFn: () =>
-    activityApi.getActivitiesByUser(user!.id, {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    }),
-  enabled: !!user?.id,
-});
+  // Список активностей (привязан к месяцу, как у тебя сейчас)
+  const { data: activities = [], isLoading } = useQuery({
+    queryKey: [
+      "/api/activities/user",
+      user?.id,
+      startDate.toISOString(),
+      endDate.toISOString(),
+    ],
+    queryFn: () =>
+      activityApi.getActivitiesByUser(user!.id, {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      }),
+    enabled: !!user?.id,
+  });
 
   // Календарная статистика (для режима "Календарь")
   const {
@@ -151,7 +151,6 @@ const { data: activities = [], isLoading } = useQuery({
     updateStatusMutation.mutate({ id, status: "completed" });
   };
 
-  // Клик по иконке "редактировать" в карточке
   const handleEdit = (activity: ActivityWithDetails) => {
     setEditingActivity(activity);
     setCreateModalOpen(true);
@@ -161,7 +160,7 @@ const { data: activities = [], isLoading } = useQuery({
     updateStatusMutation.mutate({ id, status: "cancelled" });
   };
 
-  // Фильтрация для списка (защита от undefined + пустой запрос)
+  // Фильтрация для списка
   const filteredActivities = activities.filter((activity) => {
     if (!searchTerm.trim()) return true;
 
@@ -173,7 +172,7 @@ const { data: activities = [], isLoading } = useQuery({
     return title.includes(q) || desc.includes(q) || city.includes(q);
   });
 
-  // Группировка по датам (для списка)
+  // Группировка по датам для списка
   const groupedActivities = filteredActivities.reduce((groups, activity) => {
     const dateKey = format(new Date(activity.startDate), "yyyy-MM-dd");
     if (!groups[dateKey]) {
@@ -221,7 +220,7 @@ const { data: activities = [], isLoading } = useQuery({
 
         <UserProfile user={user} />
 
-        <div className="flex justify между items-center mt-2">
+        <div className="flex justify-between items-center mt-2">
           <h3 className="text-white font-medium">План-факт активностей</h3>
           <Button
             className="ml-auto px-3 py-1 rounded bg-green-600 text-white text-sm"
@@ -235,33 +234,33 @@ const { data: activities = [], isLoading } = useQuery({
           </Button>
         </div>
 
-{/* Переключатель режимов */}
-<div className="mt-3 flex gap-2">
-  <Button
-    size="sm"
-    variant={viewMode === "list" ? "default" : "outline"}
-    className={
-      viewMode === "list"
-        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-        : "border-emerald-600 text-emerald-700"
-    }
-    onClick={() => setViewMode("list")}
-  >
-    Список
-  </Button>
-  <Button
-    size="sm"
-    variant={viewMode === "calendar" ? "default" : "outline"}
-    className={
-      viewMode === "calendar"
-        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-        : "border-emerald-600 text-emerald-700"
-    }
-    onClick={() => setViewMode("calendar")}
-  >
-    Календарь
-  </Button>
-</div>
+        {/* Переключатель режимов */}
+        <div className="mt-3 flex gap-2">
+          <Button
+            size="sm"
+            variant={viewMode === "list" ? "default" : "outline"}
+            className={
+              viewMode === "list"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "border-emerald-600 text-emerald-700"
+            }
+            onClick={() => setViewMode("list")}
+          >
+            Список
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "calendar" ? "default" : "outline"}
+            className={
+              viewMode === "calendar"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "border-emerald-600 text-emerald-700"
+            }
+            onClick={() => setViewMode("calendar")}
+          >
+            Календарь
+          </Button>
+        </div>
       </header>
 
       {/* Search and Filters */}
@@ -367,7 +366,7 @@ const { data: activities = [], isLoading } = useQuery({
                 ))}
               </div>
 
-              {/* Сетка календаря */}
+              {/* Сетка календаря с план/факт */}
               <div className="grid grid-rows-6 gap-1">
                 {weeks.map((week, wi) => (
                   <div key={wi} className="grid grid-cols-7 gap-1">
@@ -468,6 +467,40 @@ const { data: activities = [], isLoading } = useQuery({
                   <span>Отменено</span>
                 </div>
               </div>
+
+              {/* Общая статистика по выбранному месяцу */}
+              {calendarStatsData.items.length > 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Период:{" "}
+                  {format(startDate, "dd.MM.yyyy", { locale: ru })} —{" "}
+                  {format(endDate, "dd.MM.yyyy", { locale: ru })}
+                  <br />
+                  Занятых дней:{" "}
+                  {
+                    calendarStatsData.items.filter(
+                      (d) =>
+                        d.planned +
+                          d.inProgress +
+                          d.completed +
+                          d.rescheduled +
+                          d.cancelled >
+                        0,
+                    ).length
+                  }
+                  <br />
+                  Плановых активностей (по дням):{" "}
+                  {calendarStatsData.items.reduce(
+                    (sum, d) => sum + d.planned,
+                    0,
+                  )}
+                  <br />
+                  Завершённых активностей (по дням):{" "}
+                  {calendarStatsData.items.reduce(
+                    (sum, d) => sum + d.completed,
+                    0,
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
