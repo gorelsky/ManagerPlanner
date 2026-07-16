@@ -240,112 +240,137 @@ if (activityToEdit && selectedStart < today) {
   const isSubmitting =
     createActivityMutation.isPending || updateActivityMutation.isPending;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto"
-        data-testid="create-activity-modal"
-      >
-        <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">
-            {activityToEdit ? "Редактировать активность" : "Новая активность"}
-          </DialogTitle>
-        </DialogHeader>
+return (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent
+      className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto"
+      data-testid="create-activity-modal"
+    >
+      <DialogHeader>
+        <DialogTitle className="text-lg font-semibold">
+          {activityToEdit ? "Редактировать активность" : "Новая активность"}
+        </DialogTitle>
+      </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="typeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Тип активности</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger data-testid="select-activity-type">
-                        <SelectValue placeholder="Выберите тип активности" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {activityTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="startDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Дата начала</FormLabel>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* Тип активности */}
+          <FormField
+            control={form.control}
+            name="typeId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Тип активности</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
-                    <DatePicker
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder="Выберите дату начала"
-                      data-testid="input-start-date"
-                      minDate={new Date()}
-                    />
+                    <SelectTrigger data-testid="select-activity-type">
+                      <SelectValue placeholder="Выберите тип активности" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {activityTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Дата начала */}
+          <FormField
+            control={form.control}
+            name="startDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Дата начала</FormLabel>
+                <FormControl>
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Выберите дату начала"
+                    data-testid="input-start-date"
+                    minDate={new Date()}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Дата окончания — НОВОЕ */}
+          <FormField
+            control={form.control}
+            name="endDate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Дата окончания</FormLabel>
+                <FormControl>
+                  <DatePicker
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="Выберите дату окончания"
+                    data-testid="input-end-date"
+                    // не даём выбрать дату окончания раньше даты начала
+                    minDate={form.getValues("startDate") || new Date()}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Время начала / окончания внутри дня */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="startTime"
+              render={({ field }) => (
+                <FormItem className="w-full">
+                  <FormLabel>Время начала</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                      <Input
+                        type="time"
+                        {...field}
+                        value={field.value || ""}
+                        className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                        data-testid="input-start-time"
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startTime"
-                render={({ field }) => (
-                  <FormItem className="w-full">
-                    <FormLabel>Время начала</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                        <Input
-                          type="time"
-                          {...field}
-                          value={field.value || ""}
-                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-                          data-testid="input-start-time"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem className="w-full">
-                    <FormLabel>Время окончания</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                        <Input
-                          type="time"
-                          {...field}
-                          value={field.value || ""}
-                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-                          data-testid="input-end-time"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <FormField
+              control={form.control}
+              name="endTime"
+              render={({ field }) => (
+                <FormItem className="w-full">
+                  <FormLabel>Время окончания</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                      <Input
+                        type="time"
+                        {...field}
+                        value={field.value || ""}
+                        className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                        data-testid="input-end-time"
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
             {/* Город — только из зоны менеджера */}
             <FormField

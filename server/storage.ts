@@ -500,16 +500,30 @@ export class DatabaseStorage implements IStorage {
 
   /* === Activities === */
 
-  async getActivitiesByUser(
-    userId: string,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<ActivityWithDetails[]> {
-    const conditions: any[] = [eq(activities.userId, userId)];
-    if (startDate) conditions.push(gte(activities.startDate, startDate));
-    if (endDate) conditions.push(lte(activities.endDate, endDate));
-    return this.queryActivities(conditions);
+async getActivitiesByUser(
+  userId: string,
+  startDate?: Date,
+  endDate?: Date,
+): Promise<ActivityWithDetails[]> {
+  const conditions: any[] = [eq(activities.userId, userId)];
+
+  if (startDate && endDate) {
+    // показываем любые активности, которые пересекаются с выбранным периодом
+    conditions.push(
+      sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
+    );
+  } else {
+    // если задан только один край, оставляем старую логику
+    if (startDate) {
+      conditions.push(gte(activities.startDate, startDate));
+    }
+    if (endDate) {
+      conditions.push(lte(activities.startDate, endDate));
+    }
   }
+
+  return this.queryActivities(conditions);
+}
 
   async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [];
