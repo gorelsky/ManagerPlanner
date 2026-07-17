@@ -8,7 +8,7 @@ export default function UserProfile({ user }: UserProfileProps) {
   return (
     <div className="flex items-center space-x-3 mb-4" data-testid="user-profile">
       <img 
-        src={user.profileImage || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face"} 
+        src={user.profileImage || "/employees-photos/Little_logo.jpg"}
         alt="Профиль пользователя" 
         className="w-16 h-16 rounded-xl object-cover border-2 border-white/20"
         data-testid="user-avatar"

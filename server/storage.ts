@@ -904,8 +904,9 @@ async updateActivityStatus(id: string, status: string): Promise<Activity> {
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<MessageWithDetails> {
+    console.log("CREATE MESSAGE input:", insertMessage); // добавь это
     const [message] = await db.insert(messages).values(insertMessage).returning();
-
+    console.log("CREATE MESSAGE db result:", message); // и это 
     const [sender] = await db
       .select({
         id: users.id,

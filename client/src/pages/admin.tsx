@@ -78,8 +78,14 @@ export default function Admin() {
   const queryClient = useQueryClient();
 
   const [currentDate] = useState(() => new Date());
+  const isReadOnly = user?.role === "director";
 
-  if (user?.role !== "admin") {
+  // выбранный менеджер для фильтра
+  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(
+    null,
+  );
+
+  if (user?.role !== "admin" && user?.role !== "director") {
     return (
       <div className="p-4 text-center">
         <h1 className="text-xl font-semibold mb-4">Доступ запрещен</h1>
@@ -150,6 +156,18 @@ export default function Admin() {
     {},
   );
 
+  const managersFromActivities =
+    allActivities
+      ?.filter((a) => a.managerName)
+      .map((a) => ({
+        id: a.managerName as string,
+        name: a.managerName as string,
+      })) ?? [];
+
+  const uniqueManagers = Array.from(
+    new Map(managersFromActivities.map((m) => [m.id, m])).values(),
+  );
+
   const importEmployeesMutation = useMutation({
     mutationFn: (data: string) => employeeApi.importEmployees(data),
     onSuccess: (result) => {
@@ -209,27 +227,30 @@ export default function Admin() {
       });
     },
   });
-const updateActivityMutation = useMutation({
-  mutationFn: (payload: { id: string; data: Partial<ActivityWithDetails> }) =>
-    activityApi.updateActivity(payload.id, payload.data),
-  onSuccess: (updatedActivity) => {
-    queryClient.setQueryData(
-      ["/api/activities/all"],
-      (old: ActivityWithDetails[] | undefined) =>
-        (old ?? []).map((a) => (a.id === updatedActivity.id ? updatedActivity : a)),
-    );
-    toast({
-      title: "Активность изменена",
-    });
-  },
-  onError: (error: any) => {
-    toast({
-      title: "Ошибка изменения активности",
-      description: error.message || "Не удалось изменить активность",
-      variant: "destructive",
-    });
-  },
-});
+
+  const updateActivityMutation = useMutation({
+    mutationFn: (payload: { id: string; data: Partial<ActivityWithDetails> }) =>
+      activityApi.updateActivity(payload.id, payload.data),
+    onSuccess: (updatedActivity) => {
+      queryClient.setQueryData(
+        ["/api/activities/all"],
+        (old: ActivityWithDetails[] | undefined) =>
+          (old ?? []).map((a) =>
+            a.id === updatedActivity.id ? updatedActivity : a,
+          ),
+      );
+      toast({
+        title: "Активность изменена",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка изменения активности",
+        description: error.message || "Не удалось изменить активность",
+        variant: "destructive",
+      });
+    },
+  });
 
   const deleteActivityMutation = useMutation({
     mutationFn: (id: string) => activityApi.deleteActivity(id),
@@ -303,11 +324,13 @@ const updateActivityMutation = useMutation({
       });
       return;
     }
+    if (isReadOnly) return;
     setIsImporting(true);
     importEmployeesMutation.mutate(csvData);
   };
 
   const handleImportManagers = async () => {
+    if (isReadOnly) return;
     if (!managerFile) {
       toast({
         title: "Ошибка",
@@ -333,6 +356,7 @@ const updateActivityMutation = useMutation({
   };
 
   const handleImportCities = () => {
+    if (isReadOnly) return;
     if (!citiesCsv.trim()) {
       toast({
         title: "Ошибка",
@@ -346,6 +370,7 @@ const updateActivityMutation = useMutation({
   };
 
   const handleImportManagerCities = () => {
+    if (isReadOnly) return;
     if (!managerCitiesCsv.trim()) {
       toast({
         title: "Ошибка",
@@ -359,6 +384,7 @@ const updateActivityMutation = useMutation({
   };
 
   const handleImportHolidays = async () => {
+    if (isReadOnly) return;
     if (!holidaysCsv.trim()) {
       toast({
         title: "Ошибка",
@@ -387,6 +413,7 @@ const updateActivityMutation = useMutation({
   };
 
   const downloadTemplate = () => {
+    if (isReadOnly) return;
     const template =
       "firstName,lastName,middleName,phone,email,city,manager,profileImage";
     const blob = new Blob([template], { type: "text/csv" });
@@ -421,7 +448,9 @@ const updateActivityMutation = useMutation({
                 <Users className="w-5 h-5 text-blue-600" />
                 <div>
                   <p className="text-sm text-muted-foreground">Всего МП</p>
-                  <p className="text-xl font-semibold">{allEmployees.length}</p>
+                  <p className="text-xl font-semibold">
+                    {allEmployees.length}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -440,197 +469,207 @@ const updateActivityMutation = useMutation({
           </Card>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Массовая загрузка МП</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex space-x-2">
-              <Button
-                variant="outline"
-                onClick={downloadTemplate}
-                className="flex items-center space-x-2"
-              >
-                <Download className="w-4 h-4" />
-                <span>Скачать шаблон</span>
-              </Button>
-            </div>
+        {!isReadOnly && (
+          <>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="w-5 h-5" />
+                  <span>Массовая загрузка МП</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    onClick={downloadTemplate}
+                    className="flex items-center space-x-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Скачать шаблон</span>
+                  </Button>
+                </div>
 
-            <div>
-              <Label htmlFor="csv-data">
-                CSV данные (разделитель - запятая)
-              </Label>
-              <Textarea
-                id="csv-data"
-                placeholder="firstName,lastName,middleName,phone,email,city,manager,profileImage"
-                value={csvData}
-                onChange={(e) => setCsvData(e.target.value)}
-                rows={6}
-                className="mt-1"
-              />
-            </div>
+                <div>
+                  <Label htmlFor="csv-data">
+                    CSV данные (разделитель - запятая)
+                  </Label>
+                  <Textarea
+                    id="csv-data"
+                    placeholder="firstName,lastName,middleName,phone,email,city,manager,profileImage"
+                    value={csvData}
+                    onChange={(e) => setCsvData(e.target.value)}
+                    rows={6}
+                    className="mt-1"
+                  />
+                </div>
 
-            <Button
-              onClick={handleImport}
-              disabled={isImporting || !csvData.trim()}
-              className="w-full"
-            >
-              {isImporting ? "Импортирую..." : "Импортировать МП"}
-            </Button>
-          </CardContent>
-        </Card>
+                <Button
+                  onClick={handleImport}
+                  disabled={isImporting || !csvData.trim() || isReadOnly}
+                  className="w-full"
+                >
+                  {isImporting ? "Импортирую..." : "Импортировать МП"}
+                </Button>
+              </CardContent>
+            </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Массовая загрузка городов</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="cities-csv">
-                CSV города (колонки: name,region)
-              </Label>
-              <Textarea
-                id="cities-csv"
-                placeholder={`name,region\nМосква,Центральный\nСанкт-Петербург,СЗФО`}
-                value={citiesCsv}
-                onChange={(e) => setCitiesCsv(e.target.value)}
-                rows={6}
-                className="mt-1"
-              />
-            </div>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="w-5 h-5" />
+                  <span>Массовая загрузка городов</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="cities-csv">
+                    CSV города (колонки: name,region)
+                  </Label>
+                  <Textarea
+                    id="cities-csv"
+                    placeholder={`name,region\nМосква,Центральный\nСанкт-Петербург,СЗФО`}
+                    value={citiesCsv}
+                    onChange={(e) => setCitiesCsv(e.target.value)}
+                    rows={6}
+                    className="mt-1"
+                  />
+                </div>
 
-            <Button
-              onClick={handleImportCities}
-              disabled={isImportingCities || !citiesCsv.trim()}
-              className="w-full"
-            >
-              {isImportingCities ? "Импортирую города..." : "Импортировать города"}
-            </Button>
-          </CardContent>
-        </Card>
+                <Button
+                  onClick={handleImportCities}
+                  disabled={isImportingCities || !citiesCsv.trim() || isReadOnly}
+                  className="w-full"
+                >
+                  {isImportingCities ? "Импортирую города..." : "Импортировать города"}
+                </Button>
+              </CardContent>
+            </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Массовая загрузка городов менеджеров</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="manager-cities-csv">
-                CSV связи менеджер ↔ город (колонки: managerEmail,city)
-              </Label>
-              <Textarea
-                id="manager-cities-csv"
-                placeholder={`managerEmail,city\nt.tolmacheva@sls-pharma.ru,Барнаул\nn.pervakova@sls-pharma.ru,Волгоград`}
-                value={managerCitiesCsv}
-                onChange={(e) => setManagerCitiesCsv(e.target.value)}
-                rows={6}
-                className="mt-1"
-              />
-            </div>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="w-5 h-5" />
+                  <span>Массовая загрузка городов менеджеров</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="manager-cities-csv">
+                    CSV связи менеджер ↔ город (колонки: managerEmail,city)
+                  </Label>
+                  <Textarea
+                    id="manager-cities-csv"
+                    placeholder={`managerEmail,city\nt.tolmacheva@sls-pharma.ru,Барнаул\nn.pervakova@sls-pharma.ru,Волгоград`}
+                    value={managerCitiesCsv}
+                    onChange={(e) => setManagerCitiesCsv(e.target.value)}
+                    rows={6}
+                    className="mt-1"
+                  />
+                </div>
 
-            <Button
-              onClick={handleImportManagerCities}
-              disabled={isImportingManagerCities || !managerCitiesCsv.trim()}
-              className="w-full"
-            >
-              {isImportingManagerCities
-                ? "Импортирую связи..."
-                : "Импортировать города менеджеров"}
-            </Button>
-          </CardContent>
-        </Card>
+                <Button
+                  onClick={handleImportManagerCities}
+                  disabled={
+                    isImportingManagerCities ||
+                    !managerCitiesCsv.trim() ||
+                    isReadOnly
+                  }
+                  className="w-full"
+                >
+                  {isImportingManagerCities
+                    ? "Импортирую связи..."
+                    : "Импортировать города менеджеров"}
+                </Button>
+              </CardContent>
+            </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Массовая загрузка праздничных дней</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="holidays-csv">
-                CSV праздники (колонки: date,name)
-              </Label>
-              <Textarea
-                id="holidays-csv"
-                placeholder={`date,name\n2026-01-01,Новый год\n2026-01-07,Рождество`}
-                value={holidaysCsv}
-                onChange={(e) => setHolidaysCsv(e.target.value)}
-                rows={6}
-                className="mt-1"
-              />
-            </div>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="w-5 h-5" />
+                  <span>Массовая загрузка праздничных дней</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="holidays-csv">
+                    CSV праздники (колонки: date,name)
+                  </Label>
+                  <Textarea
+                    id="holidays-csv"
+                    placeholder={`date,name\n2026-01-01,Новый год\n2026-01-07,Рождество`}
+                    value={holidaysCsv}
+                    onChange={(e) => setHolidaysCsv(e.target.value)}
+                    rows={6}
+                    className="mt-1"
+                  />
+                </div>
 
-            <Button
-              onClick={handleImportHolidays}
-              disabled={isImportingHolidays || !holidaysCsv.trim()}
-              className="w-full"
-            >
-              {isImportingHolidays
-                ? "Импортирую праздники..."
-                : "Импортировать праздники"}
-            </Button>
-          </CardContent>
-        </Card>
+                <Button
+                  onClick={handleImportHolidays}
+                  disabled={isImportingHolidays || !holidaysCsv.trim() || isReadOnly}
+                  className="w-full"
+                >
+                  {isImportingHolidays
+                    ? "Импортирую праздники..."
+                    : "Импортировать праздники"}
+                </Button>
+              </CardContent>
+            </Card>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Upload className="w-5 h-5" />
-              <span>Массовая загрузка менеджеров</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="manager-role">Роль для импорта</Label>
-              <select
-                id="manager-role"
-                value={managerRole}
-                onChange={(e) =>
-                  setManagerRole(e.target.value as "manager" | "admin")
-                }
-                className="w-full border rounded px-2 py-1 text-sm"
-              >
-                <option value="manager">Менеджер</option>
-                <option value="admin">Администратор</option>
-              </select>
-            </div>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Upload className="w-5 h-5" />
+                  <span>Массовая загрузка менеджеров</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manager-role">Роль для импорта</Label>
+                  <select
+                    id="manager-role"
+                    value={managerRole}
+                    onChange={(e) =>
+                      setManagerRole(e.target.value as "manager" | "admin")
+                    }
+                    className="w-full border rounded px-2 py-1 text-sm"
+                    disabled={isReadOnly}
+                  >
+                    <option value="manager">Менеджер</option>
+                    <option value="admin">Администратор</option>
+                  </select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="manager-file">CSV файл менеджеров</Label>
-              <Input
-                id="manager-file"
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Ожидаются колонки:
-                username,password,firstName,lastName,middleName,profileImage
-              </p>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manager-file">CSV файл менеджеров</Label>
+                  <Input
+                    id="manager-file"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
+                    disabled={isReadOnly}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ожидаются колонки:
+                    username,password,firstName,lastName,middleName,profileImage
+                  </p>
+                </div>
 
-            <Button
-              onClick={handleImportManagers}
-              disabled={isImportingManagers || !managerFile}
-              className="w-full"
-            >
-              {isImportingManagers
-                ? "Импортирую менеджеров..."
-                : "Импортировать менеджеров"}
-            </Button>
-          </CardContent>
-        </Card>
+                <Button
+                  onClick={handleImportManagers}
+                  disabled={isImportingManagers || !managerFile || isReadOnly}
+                  className="w-full"
+                >
+                  {isImportingManagers
+                    ? "Импортирую менеджеров..."
+                    : "Импортировать менеджеров"}
+                </Button>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         <Card className="mb-6">
           <CardHeader>
@@ -673,7 +712,11 @@ const updateActivityMutation = useMutation({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => deleteManagerMutation.mutate(manager.id)}
+                    disabled={isReadOnly}
+                    onClick={() => {
+                      if (isReadOnly) return;
+                      deleteManagerMutation.mutate(manager.id);
+                    }}
                   >
                     Удалить
                   </Button>
@@ -682,8 +725,7 @@ const updateActivityMutation = useMutation({
             )}
           </CardContent>
         </Card>
-
-        {/* Простые вкладки: МП и планы менеджеров */}
+        
         <div className="mb-4 flex border-b">
           <button
             type="button"
@@ -769,7 +811,27 @@ const updateActivityMutation = useMutation({
         {activeTab === "plans" && (
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Все активности за месяц</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Все активности за месяц</CardTitle>
+
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm">Менеджер:</span>
+                  <select
+                    className="border rounded px-2 py-1 text-sm"
+                    value={selectedManagerId ?? ""}
+                    onChange={(e) =>
+                      setSelectedManagerId(e.target.value || null)
+                    }
+                  >
+                    <option value="">Все</option>
+                    {uniqueManagers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {activitiesLoading ? (
@@ -783,86 +845,94 @@ const updateActivityMutation = useMutation({
                       </h2>
 
                       <div className="space-y-2 pl-4 border-l border-muted">
-                        {days.map((day) => (
-                          <div
-                            key={day.date.toISOString()}
-                            className="space-y-2"
-                          >
-                            <h3 className="text-sm font-semibold text-muted-foreground">
-                              {day.date.toLocaleDateString("ru-RU", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                                weekday: "short",
-                              })}
-                            </h3>
+                        {days.map((day) => {
+                          const dayActivities =
+                            selectedManagerId
+                              ? day.activities.filter(
+                                  (activity) =>
+                                    activity.managerName === selectedManagerId,
+                                )
+                              : day.activities;
 
-                            {day.activities.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                Нет активностей
-                              </p>
-                            ) : (
-                              day.activities.map((activity) => {
-                                const isPast = isActivityPast(activity);
+                          return (
+                            <div
+                              key={day.date.toISOString()}
+                              className="space-y-2"
+                            >
+                              <h3 className="text-sm font-semibold text-muted-foreground">
+                                {day.date.toLocaleDateString("ru-RU", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  weekday: "short",
+                                })}
+                              </h3>
 
-                                return (
-                                  <div
-                                    key={activity.id}
-                                    className="flex items-center justify-between p-3 border rounded-lg"
-                                  >
-                                    <div className="flex flex-col">
-                                      <p className="font-medium">
-                                        {activity.type?.name} •{" "}
-                                        {activity.employee?.lastName}{" "}
-                                        {activity.employee?.firstName}
-                                      </p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {activity.city?.name} •{" "}
-                                        {new Date(
-                                          activity.startDate,
-                                        ).toLocaleString()}{" "}
-                                        —{" "}
-                                        {new Date(
-                                          activity.endDate,
-                                        ).toLocaleString()}{" "}
-                                        • {activity.user?.lastName}{" "}
-                                        {activity.user?.firstName}
-                                      </p>
+                              {dayActivities.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Нет активностей
+                                </p>
+                              ) : (
+                                dayActivities.map((activity) => {
+                                  const isPast = isActivityPast(activity);
+
+                                  return (
+                                    <div
+                                      key={activity.id}
+                                      className="flex items-center justify-between p-3 border rounded-lg"
+                                    >
+                                      <div className="flex flex-col">
+                                        <p className="font-medium">
+                                          {activity.type?.name} •{" "}
+                                          {activity.employee?.lastName}{" "}
+                                          {activity.employee?.firstName}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {activity.city?.name} •{" "}
+                                          {new Date(
+                                            activity.startDate,
+                                          ).toLocaleString("ru-RU", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}{" "}
+                                          —{" "}
+                                          {new Date(
+                                            activity.endDate,
+                                          ).toLocaleString("ru-RU", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}{" "}
+                                          • менеджер: {activity.managerName}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={isPast || isReadOnly}
+                                          onClick={() => {
+                                            if (isPast || isReadOnly) return;
+                                            deleteActivityMutation.mutate(
+                                              activity.id,
+                                            );
+                                          }}
+                                        >
+                                          Удалить
+                                        </Button>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center space-x-2">
-                                      {/* здесь можно будет добавить кнопку Редактировать */}
-                                      {/* <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={isPast}
-                                        onClick={() => {
-                                          if (isPast) return;
-                                          openEdit(activity);
-                                        }}
-                                      >
-                                        Редактировать
-                                      </Button> */}
-
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={isPast}
-                                        onClick={() => {
-                                          if (isPast) return;
-                                          deleteActivityMutation.mutate(
-                                            activity.id,
-                                          );
-                                        }}
-                                      >
-                                        Удалить
-                                      </Button>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        ))}
+                                  );
+                                })
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}

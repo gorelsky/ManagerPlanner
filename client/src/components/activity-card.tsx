@@ -44,8 +44,8 @@ export default function ActivityCard({
               className="text-xs font-medium text-muted-foreground"
               data-testid="activity-time"
             >
-              {format(new Date(activity.startDate), "dd.MM.yyyy, HH:mm", { locale: ru })} -{" "}
-              {format(new Date(activity.endDate), "dd.MM.yyyy, HH:mm", { locale: ru })}
+              {format(new Date(activity.startDate), "dd.MMM.yyyy, HH:mm", { locale: ru })} -{" "}
+              {format(new Date(activity.endDate), "dd.MMM.yyyy, HH:mm", { locale: ru })}
             </span>
             <span
               className={cn("px-2 py-1 rounded text-xs font-medium", status.className)}
@@ -101,7 +101,7 @@ export default function ActivityCard({
               if (!canComplete) {
                 alert(
                   `Нельзя завершить активность раньше времени окончания. ` +
-                    `Можно после ${format(endDateTime, "dd.MM.yyyy HH:mm", { locale: ru })}`,
+                    `Можно после ${format(endDateTime, "dd.MMM.yyyy HH:mm", { locale: ru })}`,
                 );
                 return;
               }

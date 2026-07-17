@@ -34,14 +34,14 @@ export default function BottomNavigation() {
     },
   ];
 
-  if (user?.role === "admin") {
-    navItems.push({
-      path: "/admin",
-      icon: Settings,
-      label: "Админ",
-      testId: "nav-admin",
-    });
-  }
+if (user?.role === "admin" || user?.role === "director") {
+  navItems.push({
+    path: "/admin",
+    icon: Settings,
+    label: "Админ",
+    testId: "nav-admin",
+  });
+}
 
   return (
     <nav

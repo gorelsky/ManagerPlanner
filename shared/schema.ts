@@ -21,7 +21,8 @@ export const users = pgTable("users", {
   lastName: text("last_name").notNull(),
   middleName: text("middle_name"),
   profileImage: text("profile_image"),
-  role: text("role").notNull().default("manager"), // manager, admin
+  // Теперь: manager, admin, director
+  role: text("role").notNull().default("manager"),
   cityId: varchar("city_id").references(() => cities.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -178,10 +179,15 @@ export const holidaysRelations = relations(holidays, () => ({}));
 
 /* === Insert schemas === */
 
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
-});
+export const insertUserSchema = createInsertSchema(users)
+  .omit({
+    id: true,
+    createdAt: true,
+  })
+  // при желании можно добавить ограничение по ролям
+  .extend({
+    role: z.enum(["admin", "manager", "director"]),
+  });
 
 export const insertCitySchema = createInsertSchema(cities).omit({
   id: true,

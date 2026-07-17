@@ -189,7 +189,7 @@ export default function Chat() {
                         </p>
                         <p
   className={`text-xs mt-1 ${
-    isOwnMessage ? "text-blue-100" : "text-muted-foreground"
+    isOwnMessage ? "text-blue-300" : "text-muted-foreground"
   }`}
 >
   {message.createdAt ?? ""}

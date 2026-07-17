@@ -506,15 +506,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 app.get("/api/messages/:userId", async (req, res) => {
   try {
     const userId = req.params.userId;
-    const messages = await storage.getMessages(userId);
 
-    // Здесь форматируем createdAt как московское локальное время в строку
+    console.log("GET /api/messages for user:", userId);
+
+    const messages = await storage.getMessages(userId);
+    console.log("MESSAGES API RESULT:", messages);
+
     const formatted = messages.map((message) => ({
       ...message,
       createdAt: message.createdAt
-        ? format(message.createdAt, "отправлено dd.MM.yyyy в HH:mm", { locale: ru })
+        ? format(message.createdAt, "'отправлено' dd.MMM.yyyy 'в' HH:mm", { locale: ru })
         : null,
     }));
+
+    console.log("MESSAGES API FORMATTED:", formatted);
 
     res.json(formatted);
   } catch (error) {
@@ -523,60 +528,95 @@ app.get("/api/messages/:userId", async (req, res) => {
   }
 });
 
-  app.patch("/api/messages/:messageId/read", async (req, res) => {
-    try {
-      const messageId = req.params.messageId;
-      await storage.markMessageAsRead(messageId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("PATCH /api/messages/:messageId/read error", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
+// НОВОЕ: маршрут для создания сообщений
+app.post("/api/messages", async (req, res) => {
+  try {
+    console.log("POST /api/messages body:", req.body);
 
-  app.patch("/api/activities/:id/status", async (req, res) => {
-    try {
-      const id = req.params.id;
-      const { status } = req.body as { status: string };
+    const messageData = insertMessageSchema.parse(req.body);
+    console.log("POST /api/messages parsed:", messageData);
 
-      if (!status) {
-        return res.status(400).json({ message: "Status is required" });
-      }
+    const message = await storage.createMessage(messageData);
+    console.log("POST /api/messages storage result:", message);
 
-      console.log("UPDATE STATUS REQUEST", { id, status });
+    const formatted = {
+  ...message,
+  createdAt: message.createdAt
+    ? format(
+        message.createdAt,
+        "'отправлено' dd.MM.yyyy 'в' HH:mm",
+        { locale: ru },
+      )
+    : null,
+};
 
-      const existing = await storage.getActivity(id);
-
-      if (!existing) {
-        return res.status(404).json({ message: "Activity not found" });
-      }
-
-      if (status === "completed") {
-        const now = new Date();
-        const endDateTime = new Date(existing.endDate);
-
-        if (now.getTime() < endDateTime.getTime()) {
-          return res.status(400).json({
-            message: "Нельзя завершить активность раньше времени окончания",
-          });
-        }
-      }
-
-      const activity = await storage.updateActivityStatus(id, status);
-
-      console.log("UPDATE STATUS SUCCESS", activity);
-
-      res.json(activity);
-    } catch (error) {
-      console.error("PATCH /api/activities/:id/status error", error);
-      res.status(500).json({
-        message: "Internal server error when updating status",
-        error: (error as any)?.message ?? String(error),
+    res.status(201).json(formatted);
+  } catch (error) {
+    console.error("POST /api/messages error", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Invalid message data",
+        errors: error.errors,
       });
     }
-  });
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
-  // вот этот кусок необходим:
-  const httpServer = createServer(app);
-  return httpServer;
+app.patch("/api/messages/:messageId/read", async (req, res) => {
+  try {
+    const messageId = req.params.messageId;
+    await storage.markMessageAsRead(messageId);
+    res.status(204).send();
+  } catch (error) {
+    console.error("PATCH /api/messages/:messageId/read error", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.patch("/api/activities/:id/status", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { status } = req.body as { status: string };
+
+    if (!status) {
+      return res.status(400).json({ message: "Status is required" });
+    }
+
+    console.log("UPDATE STATUS REQUEST", { id, status });
+
+    const existing = await storage.getActivity(id);
+
+    if (!existing) {
+      return res.status(404).json({ message: "Activity not found" });
+    }
+
+    if (status === "completed") {
+      const now = new Date();
+      const endDateTime = new Date(existing.endDate);
+
+      if (now.getTime() < endDateTime.getTime()) {
+        return res.status(400).json({
+          message: "Нельзя завершить активность раньше времени окончания",
+        });
+      }
+    }
+
+    const activity = await storage.updateActivityStatus(id, status);
+
+    console.log("UPDATE STATUS SUCCESS", activity);
+
+    res.json(activity);
+  } catch (error) {
+    console.error("PATCH /api/activities/:id/status error", error);
+    res.status(500).json({
+      message: "Internal server error when updating status",
+      error: (error as any)?.message ?? String(error),
+    });
+  }
+});
+
+// вот этот кусок необходим:
+const httpServer = createServer(app);
+return httpServer;
 }
