@@ -14,32 +14,52 @@ export default function SideMenu() {
     setOpen(false);
     logout();
   };
+// перед return
+const roleLabel =
+  user.role === "admin"
+    ? "Администратор"
+    : user.role === "director"
+    ? "Директор"
+    : "Менеджер";
 
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <button className="text-white" data-testid="button-menu">
-          <Menu className="w-6 h-6" />
-        </button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-800">
-        <SheetHeader>
-          <SheetTitle className="text-white text-left">
-            <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                <User className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {user.firstName} {user.middleName} {user.lastName}
-                </p>
-                <p className="text-xs text-white/70">
-                  {user.role === "admin" ? "Администратор" : "Менеджер"}
-                </p>
-              </div>
+return (
+  <Sheet open={open} onOpenChange={setOpen}>
+    <SheetTrigger asChild>
+      <button className="text-white" data-testid="button-menu">
+        <Menu className="w-6 h-6" />
+      </button>
+    </SheetTrigger>
+    <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500">
+      <SheetHeader>
+        <SheetTitle className="text-white text-left">
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <User className="w-5 h-5" />
             </div>
-          </SheetTitle>
-        </SheetHeader>
+            <div>
+              <p className="text-sm font-medium">
+                {user.firstName} {user.middleName} {user.lastName}
+              </p>
+              <p className="text-xs text-white/70">
+                {roleLabel}
+              </p>
+{/* НОВОЕ: email как mailto-ссылка */}
+{user.username && (
+  <p className="text-xs text-green-50">
+    Отправить письмо с адреса{" "}
+    <a
+      href={`mailto:${user.username}`}
+      className="underline"
+      data-testid="user-email-link"
+    >
+      {user.username}
+    </a>
+  </p>
+)}
+            </div>
+          </div>
+        </SheetTitle>
+      </SheetHeader>
 
         <div className="mt-8 flex flex-col space-y-2">
           <div className="px-4 py-3 rounded-lg bg-white/10">
@@ -49,7 +69,7 @@ export default function SideMenu() {
 
           {user.role === "admin" && (
             <div className="px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
-              <Shield className="w-4 h-4 text-yellow-300" />
+              <Shield className="w-4 h-4 text-yellow-200" />
               <span className="text-sm">Права администратора</span>
             </div>
           )}
@@ -57,7 +77,7 @@ export default function SideMenu() {
           <div className="mt-auto pt-8">
             <Button
               variant="outline"
-              className="w-full bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+              className="w-full bg-white/10 text-white border-white/20 hover:bg-white/40 hover:text-white"
               onClick={handleLogout}
               data-testid="button-logout"
             >

@@ -7,42 +7,69 @@ export default function BottomNavigation() {
   const [location] = useLocation();
   const { user } = useAuth();
 
-  const navItems = [
-    {
-      path: "/",
-      icon: PenTool,
-      label: "Внесение",
-      testId: "nav-entry",
-    },
-    {
-      path: "/reps",
-      icon: Users,
-      label: "МП",
-      testId: "nav-reps",
-    },
-    {
-      path: "/analytics",
-      icon: BarChart3,
-      label: "Аналитика",
-      testId: "nav-analytics",
-    },
-    {
+  const navItems = [];
+
+  if (user?.role === "director") {
+    // Директор: сначала Админ, потом Чат
+    navItems.push({
+      path: "/admin",
+      icon: Settings,
+      label: "Админ",
+      testId: "nav-admin",
+    });
+    navItems.push({
       path: "/chat",
       icon: MessageCircle,
       label: "Чат",
       testId: "nav-chat",
-    },
-  ];
+    });
+  } else {
+    // Все остальные: пользовательские панели + чат
+    navItems.push({
+      path: "/",
+      icon: PenTool,
+      label: "Внесение",
+      testId: "nav-entry",
+    });
+    navItems.push({
+      path: "/reps",
+      icon: Users,
+      label: "МП",
+      testId: "nav-reps",
+    });
+    navItems.push({
+      path: "/analytics",
+      icon: BarChart3,
+      label: "Аналитика",
+      testId: "nav-analytics",
+    });
+    navItems.push({
+      path: "/chat",
+      icon: MessageCircle,
+      label: "Чат",
+      testId: "nav-chat",
+    });
 
+    // Админ — только админу (у директора уже выше обработано отдельно)
+    if (user?.role === "admin") {
+      navItems.push({
+        path: "/admin",
+        icon: Settings,
+        label: "Админ",
+        testId: "nav-admin",
+      });
+    }
+  }
+  
+  //Для директора и админа добавлены Отчеты
 if (user?.role === "admin" || user?.role === "director") {
   navItems.push({
-    path: "/admin",
-    icon: Settings,
-    label: "Админ",
-    testId: "nav-admin",
+    path: "/reports",
+    icon: BarChart3, // или другой
+    label: "Отчёты",
+    testId: "nav-reports",
   });
 }
-
   return (
     <nav
       className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border"

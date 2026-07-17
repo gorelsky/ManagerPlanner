@@ -10,6 +10,7 @@ import Representatives from "@/pages/representatives";
 import Analytics from "@/pages/analytics";
 import Chat from "@/pages/chat";
 import Admin from "@/pages/admin";
+import Reports from "@/pages/reports"; // НОВОЕ
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -38,6 +39,8 @@ function Router() {
       <Route path="/analytics" component={Analytics} />
       <Route path="/chat" component={Chat} />
       <Route path="/admin" component={Admin} />
+      {/* НОВОЕ: отчёты */}
+      <Route path="/reports" component={Reports} />
       <Route component={NotFound} />
     </Switch>
   );

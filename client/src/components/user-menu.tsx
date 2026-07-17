@@ -23,13 +23,28 @@ export default function UserMenu() {
     logout();
   };
 
+  // подпись роли под именем
+  const roleLabel =
+    user.role === "admin"
+      ? "Администратор"
+      : user.role === "director"
+      ? "Директор"
+      : "Менеджер";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full" data-testid="button-user-menu">
+        <Button
+          variant="ghost"
+          className="relative h-10 w-10 rounded-full"
+          data-testid="button-user-menu"
+        >
           <Avatar className="h-10 w-10">
             {user.profileImage ? (
-              <AvatarImage src={user.profileImage} alt={`${user.firstName} ${user.lastName}`} />
+              <AvatarImage
+                src={user.profileImage}
+                alt={`${user.firstName} ${user.lastName}`}
+              />
             ) : null}
             <AvatarFallback className="bg-blue-100 text-blue-600">
               {initials}
@@ -47,7 +62,7 @@ export default function UserMenu() {
               @{user.username}
             </p>
             <p className="text-xs leading-none text-muted-foreground capitalize">
-              {user.role === "admin" ? "Администратор" : "Менеджер"}
+              {roleLabel}
             </p>
           </div>
         </DropdownMenuLabel>
