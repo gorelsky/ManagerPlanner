@@ -498,7 +498,7 @@ export class DatabaseStorage implements IStorage {
     console.log(`Activity types initialized. Total: ${defaultActivityTypes.length}`);
   }
 
-  /* === Activities === */
+/* === Activities === */
 
 async getActivitiesByUser(
   userId: string,
@@ -507,30 +507,26 @@ async getActivitiesByUser(
 ): Promise<ActivityWithDetails[]> {
   const conditions: any[] = [eq(activities.userId, userId)];
 
-  if (startDate && endDate) {
-    // показываем любые активности, которые пересекаются с выбранным периодом
-    conditions.push(
-      sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
-    );
-  } else {
-    // если задан только один край, оставляем старую логику
-    if (startDate) {
-      conditions.push(gte(activities.startDate, startDate));
-    }
-    if (endDate) {
-      conditions.push(lte(activities.startDate, endDate));
-    }
+  // ДЛЯ СПИСКА: фильтруем по дате начала активности
+  if (startDate) {
+    conditions.push(gte(activities.startDate, startDate));
+  }
+  if (endDate) {
+    conditions.push(lte(activities.startDate, endDate));
   }
 
   return this.queryActivities(conditions);
 }
 
-  async getAllActivities(startDate?: Date, endDate?: Date): Promise<ActivityWithDetails[]> {
-    const conditions: any[] = [];
-    if (startDate) conditions.push(gte(activities.startDate, startDate));
-    if (endDate) conditions.push(lte(activities.endDate, endDate));
-    return this.queryActivities(conditions);
-  }
+async getAllActivities(
+  startDate?: Date,
+  endDate?: Date,
+): Promise<ActivityWithDetails[]> {
+  const conditions: any[] = [];
+  if (startDate) conditions.push(gte(activities.startDate, startDate));
+  if (endDate) conditions.push(lte(activities.startDate, endDate));
+  return this.queryActivities(conditions);
+}
 
 async getActivityCalendarStatsByUser(
   userId: string,
@@ -546,7 +542,7 @@ async getActivityCalendarStatsByUser(
     rescheduled: number;
   }>
 > {
-  // 1. Берём все активности пользователя, которые пересекаются с указанным периодом
+  // 1. Берём все активности пользователя, которые ПЕРЕСЕКАЮТ период (нужно для календаря)
   const overlappingActivities = await db
     .select({
       startDate: activities.startDate,
@@ -562,7 +558,6 @@ async getActivityCalendarStatsByUser(
       ),
     );
 
-  // 2. Проходим по каждому дню от startDate до endDate
   const result: Array<{
     date: string;
     planned: number;
@@ -591,7 +586,6 @@ async getActivityCalendarStatsByUser(
     let cancelled = 0;
     let rescheduled = 0;
 
-    // 3. Для текущего дня считаем, какие активности его перекрывают
     for (const activity of overlappingActivities) {
       const aStart = activity.startDate;
       const aEnd = activity.endDate;
@@ -632,234 +626,234 @@ async getActivityCalendarStatsByUser(
   return result;
 }
 
-  private async hasOverlappingActivities(
-    userId: string,
-    employeeId: string | null | undefined,
-    cityId: string,
-    startDate: Date,
-    endDate: Date,
-    excludeActivityId?: string,
-  ): Promise<boolean> {
-    console.log("hasOverlappingActivities FUNCTION BODY START");
-    const conditions: any[] = [
-      eq(activities.userId, userId),
-      sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
-    ];
+private async hasOverlappingActivities(
+  userId: string,
+  employeeId: string | null | undefined,
+  cityId: string,
+  startDate: Date,
+  endDate: Date,
+  excludeActivityId?: string,
+): Promise<boolean> {
+  console.log("hasOverlappingActivities FUNCTION BODY START");
+  const conditions: any[] = [
+    eq(activities.userId, userId),
+    sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
+  ];
 
-    if (excludeActivityId) {
-      conditions.push(sql`${activities.id} <> ${excludeActivityId}`);
-    }
-
-    const rows = await db
-      .select({
-        id: activities.id,
-        start: activities.startDate,
-        end: activities.endDate,
-        typeId: activities.typeId,
-        employeeId: activities.employeeId,
-        cityId: activities.cityId,
-      })
-      .from(activities)
-      .where(and(...conditions));
-
-    console.log("hasOverlappingActivities CHECK:", {
-      userId,
-      employeeId,
-      cityId,
-      startDate,
-      endDate,
-      excludeActivityId,
-    });
-    console.log("hasOverlappingActivities rows:", rows);
-
-    return rows.length > 0;
+  if (excludeActivityId) {
+    conditions.push(sql`${activities.id} <> ${excludeActivityId}`);
   }
 
-  private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
-    const result = await db
-      .select({
-        id: activities.id,
-        userId: activities.userId,
-        typeId: activities.typeId,
-        cityId: activities.cityId,
-        employeeId: activities.employeeId,
-        title: activities.title,
-        description: activities.description,
-        startDate: activities.startDate,
-        endDate: activities.endDate,
-        status: activities.status,
-        createdAt: activities.createdAt,
-        updatedAt: activities.updatedAt,
-        type: activityTypes,
-        city: cities,
-        employee: employees,
-        managerFirstName: users.firstName,
-        managerLastName: users.lastName,
-        managerUsername: users.username,
-      })
-      .from(activities)
-      .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
-      .leftJoin(cities, eq(activities.cityId, cities.id))
-      .leftJoin(employees, eq(activities.employeeId, employees.id))
-      .leftJoin(users, eq(activities.userId, users.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(asc(activities.startDate));
+  const rows = await db
+    .select({
+      id: activities.id,
+      start: activities.startDate,
+      end: activities.endDate,
+      typeId: activities.typeId,
+      employeeId: activities.employeeId,
+      cityId: activities.cityId,
+    })
+    .from(activities)
+    .where(and(...conditions));
 
-    return result.map((row) => ({
-      ...row,
-      type: row.type!,
-      city: row.city!,
-      employee: row.employee || undefined,
-      managerName:
-        `${row.managerFirstName || ""} ${row.managerLastName || ""}`.trim() ||
-        row.managerUsername ||
-        "",
-    }));
+  console.log("hasOverlappingActivities CHECK:", {
+    userId,
+    employeeId,
+    cityId,
+    startDate,
+    endDate,
+    excludeActivityId,
+  });
+  console.log("hasOverlappingActivities rows:", rows);
+
+  return rows.length > 0;
+}
+
+private async queryActivities(conditions: any[]): Promise<ActivityWithDetails[]> {
+  const result = await db
+    .select({
+      id: activities.id,
+      userId: activities.userId,
+      typeId: activities.typeId,
+      cityId: activities.cityId,
+      employeeId: activities.employeeId,
+      title: activities.title,
+      description: activities.description,
+      startDate: activities.startDate,
+      endDate: activities.endDate,
+      status: activities.status,
+      createdAt: activities.createdAt,
+      updatedAt: activities.updatedAt,
+      type: activityTypes,
+      city: cities,
+      employee: employees,
+      managerFirstName: users.firstName,
+      managerLastName: users.lastName,
+      managerUsername: users.username,
+    })
+    .from(activities)
+    .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
+    .leftJoin(cities, eq(activities.cityId, cities.id))
+    .leftJoin(employees, eq(activities.employeeId, employees.id))
+    .leftJoin(users, eq(activities.userId, users.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(asc(activities.startDate));
+
+  return result.map((row) => ({
+    ...row,
+    type: row.type!,
+    city: row.city!,
+    employee: row.employee || undefined,
+    managerName:
+      `${row.managerFirstName || ""} ${row.managerLastName || ""}`.trim() ||
+      row.managerUsername ||
+      "",
+  }));
+}
+
+async getActivity(id: string): Promise<ActivityWithDetails | undefined> {
+  const [result] = await db
+    .select({
+      id: activities.id,
+      userId: activities.userId,
+      typeId: activities.typeId,
+      cityId: activities.cityId,
+      employeeId: activities.employeeId,
+      title: activities.title,
+      description: activities.description,
+      startDate: activities.startDate,
+      endDate: activities.endDate,
+      status: activities.status,
+      createdAt: activities.createdAt,
+      updatedAt: activities.updatedAt,
+      type: activityTypes,
+      city: cities,
+      employee: employees,
+    })
+    .from(activities)
+    .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
+    .leftJoin(cities, eq(activities.cityId, cities.id))
+    .leftJoin(employees, eq(activities.employeeId, employees.id))
+    .where(eq(activities.id, id));
+
+  if (!result) return undefined;
+
+  return {
+    ...result,
+    type: result.type!,
+    city: result.city!,
+    employee: result.employee || undefined,
+  };
+}
+
+async createActivity(insertActivity: InsertActivity): Promise<Activity> {
+  const { userId, employeeId, cityId, startDate, endDate } = insertActivity;
+
+  if (!startDate || !endDate) {
+    throw new Error("startDate and endDate are required");
   }
 
-  async getActivity(id: string): Promise<ActivityWithDetails | undefined> {
-    const [result] = await db
-      .select({
-        id: activities.id,
-        userId: activities.userId,
-        typeId: activities.typeId,
-        cityId: activities.cityId,
-        employeeId: activities.employeeId,
-        title: activities.title,
-        description: activities.description,
-        startDate: activities.startDate,
-        endDate: activities.endDate,
-        status: activities.status,
-        createdAt: activities.createdAt,
-        updatedAt: activities.updatedAt,
-        type: activityTypes,
-        city: cities,
-        employee: employees,
-      })
-      .from(activities)
-      .leftJoin(activityTypes, eq(activities.typeId, activityTypes.id))
-      .leftJoin(cities, eq(activities.cityId, cities.id))
-      .leftJoin(employees, eq(activities.employeeId, employees.id))
-      .where(eq(activities.id, id));
-
-    if (!result) return undefined;
-
-    return {
-      ...result,
-      type: result.type!,
-      city: result.city!,
-      employee: result.employee || undefined,
-    };
+  if (startDate >= endDate) {
+    throw new Error("Дата окончания должна быть позже даты начала");
   }
 
-  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
-    const { userId, employeeId, cityId, startDate, endDate } = insertActivity;
+  console.log("CREATE ACTIVITY CHECK OVERLAP:", {
+    userId,
+    employeeId,
+    cityId,
+    startDate,
+    endDate,
+  });
 
-    if (!startDate || !endDate) {
-      throw new Error("startDate and endDate are required");
-    }
+  const hasOverlap = await this.hasOverlappingActivities(
+    userId,
+    employeeId ?? null,
+    cityId,
+    startDate,
+    endDate,
+  );
 
-    if (startDate >= endDate) {
-      throw new Error("Дата окончания должна быть позже даты начала");
-    }
-
-    console.log("CREATE ACTIVITY CHECK OVERLAP:", {
-      userId,
-      employeeId,
-      cityId,
-      startDate,
-      endDate,
-    });
-
-    const hasOverlap = await this.hasOverlappingActivities(
-      userId,
-      employeeId ?? null,
-      cityId,
-      startDate,
-      endDate,
-    );
-
-    if (hasOverlap) {
-      throw new Error("Пересечение по времени. Повторите планирование");
-    }
-
-    const [activity] = await db
-      .insert(activities)
-      .values({
-        ...insertActivity,
-        updatedAt: new Date(),
-      })
-      .returning();
-    return activity;
+  if (hasOverlap) {
+    throw new Error("Пересечение по времени. Повторите планирование");
   }
 
-  async deleteActivity(id: string): Promise<void> {
-    await db.delete(activities).where(eq(activities.id, id));
+  const [activity] = await db
+    .insert(activities)
+    .values({
+      ...insertActivity,
+      updatedAt: new Date(),
+    })
+    .returning();
+  return activity;
+}
+
+async deleteActivity(id: string): Promise<void> {
+  await db.delete(activities).where(eq(activities.id, id));
+}
+
+async deleteUser(id: string): Promise<void> {
+  await db.delete(users).where(eq(users.id, id));
+}
+
+async updateActivity(
+  id: string,
+  updateActivity: Partial<InsertActivity>,
+): Promise<Activity> {
+  const current = await this.getActivity(id);
+  if (!current) {
+    throw new Error("Activity not found");
   }
 
-  async deleteUser(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
+  const newStart = updateActivity.startDate ?? current.startDate;
+  const newEnd = updateActivity.endDate ?? current.endDate;
+  const newEmployeeId = updateActivity.employeeId ?? current.employeeId;
+  const newCityId = updateActivity.cityId ?? current.cityId;
+
+  if (newStart >= newEnd) {
+    throw new Error("Дата окончания должна быть позже даты начала");
   }
 
-  async updateActivity(
-    id: string,
-    updateActivity: Partial<InsertActivity>,
-  ): Promise<Activity> {
-    const current = await this.getActivity(id);
-    if (!current) {
-      throw new Error("Activity not found");
-    }
+  const hasOverlap = await this.hasOverlappingActivities(
+    current.userId,
+    newEmployeeId ?? null,
+    newCityId,
+    newStart,
+    newEnd,
+    id,
+  );
 
-    const newStart = updateActivity.startDate ?? current.startDate;
-    const newEnd = updateActivity.endDate ?? current.endDate;
-    const newEmployeeId = updateActivity.employeeId ?? current.employeeId;
-    const newCityId = updateActivity.cityId ?? current.cityId;
-
-    if (newStart >= newEnd) {
-      throw new Error("Дата окончания должна быть позже даты начала");
-    }
-
-    const hasOverlap = await this.hasOverlappingActivities(
-      current.userId,
-      newEmployeeId ?? null,
-      newCityId,
-      newStart,
-      newEnd,
-      id,
-    );
-
-    if (hasOverlap) {
-      throw new Error("Пересечение по времени. Повторите планирование");
-    }
-
-    const [activity] = await db
-      .update(activities)
-      .set({
-        ...updateActivity,
-        updatedAt: new Date(),
-      })
-      .where(eq(activities.id, id))
-      .returning();
-
-    return activity;
+  if (hasOverlap) {
+    throw new Error("Пересечение по времени. Повторите планирование");
   }
 
-  async updateActivityStatus(id: string, status: string): Promise<Activity> {
-    const [activity] = await db
-      .update(activities)
-      .set({
-        status,
-        updatedAt: new Date(),
-      })
-      .where(eq(activities.id, id))
-      .returning();
+  const [activity] = await db
+    .update(activities)
+    .set({
+      ...updateActivity,
+      updatedAt: new Date(),
+    })
+    .where(eq(activities.id, id))
+    .returning();
 
-    if (!activity) {
-      throw new Error("Activity not found");
-    }
+  return activity;
+}
 
-    return activity;
+async updateActivityStatus(id: string, status: string): Promise<Activity> {
+  const [activity] = await db
+    .update(activities)
+    .set({
+      status,
+      updatedAt: new Date(),
+    })
+    .where(eq(activities.id, id))
+    .returning();
+
+  if (!activity) {
+    throw new Error("Activity not found");
   }
+
+  return activity;
+}
 
   /* === Messages === */
 
