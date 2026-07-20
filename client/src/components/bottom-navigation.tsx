@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { PenTool, BarChart3, Users, MessageCircle, Settings } from "lucide-react";
+import { PenTool, BarChart3, Users, MessageCircle, Settings, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -10,13 +10,21 @@ export default function BottomNavigation() {
   const navItems = [];
 
   if (user?.role === "director") {
-    // Директор: сначала Админ, потом Чат
+    // Директор: Админ → Отчёты → Чат
     navItems.push({
       path: "/admin",
       icon: Settings,
       label: "Админ",
       testId: "nav-admin",
     });
+
+    navItems.push({
+      path: "/reports",
+      icon: BarChart2, // или другой значок, можно BarChart3
+      label: "Отчёты",
+      testId: "nav-reports",
+    });
+
     navItems.push({
       path: "/chat",
       icon: MessageCircle,
@@ -24,25 +32,28 @@ export default function BottomNavigation() {
       testId: "nav-chat",
     });
   } else {
-    // Все остальные: пользовательские панели + чат
+    // Остальные: Внесение, МП, Аналитика, Чат (+ Админ, + Отчёты для админа)
     navItems.push({
       path: "/",
       icon: PenTool,
       label: "Внесение",
       testId: "nav-entry",
     });
+
     navItems.push({
       path: "/reps",
       icon: Users,
       label: "МП",
       testId: "nav-reps",
     });
+
     navItems.push({
       path: "/analytics",
       icon: BarChart3,
       label: "Аналитика",
       testId: "nav-analytics",
     });
+
     navItems.push({
       path: "/chat",
       icon: MessageCircle,
@@ -50,7 +61,6 @@ export default function BottomNavigation() {
       testId: "nav-chat",
     });
 
-    // Админ — только админу (у директора уже выше обработано отдельно)
     if (user?.role === "admin") {
       navItems.push({
         path: "/admin",
@@ -58,18 +68,16 @@ export default function BottomNavigation() {
         label: "Админ",
         testId: "nav-admin",
       });
+
+      navItems.push({
+        path: "/reports",
+        icon: BarChart2,
+        label: "Отчёты",
+        testId: "nav-reports",
+      });
     }
   }
-  
-  //Для директора и админа добавлены Отчеты
-if (user?.role === "admin" || user?.role === "director") {
-  navItems.push({
-    path: "/reports",
-    icon: BarChart3, // или другой
-    label: "Отчёты",
-    testId: "nav-reports",
-  });
-}
+
   return (
     <nav
       className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border"
