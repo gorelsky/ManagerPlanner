@@ -14,52 +14,58 @@ export default function SideMenu() {
     setOpen(false);
     logout();
   };
-// перед return
-const roleLabel =
-  user.role === "admin"
-    ? "Администратор"
-    : user.role === "director"
-    ? "Директор"
-    : "Менеджер";
 
-return (
-  <Sheet open={open} onOpenChange={setOpen}>
-    <SheetTrigger asChild>
-      <button className="text-white" data-testid="button-menu">
-        <Menu className="w-6 h-6" />
-      </button>
-    </SheetTrigger>
-    <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500">
-      <SheetHeader>
-        <SheetTitle className="text-white text-left">
-          <div className="flex items-center space-x-2">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <User className="w-5 h-5" />
+  const roleLabel =
+    user.role === "admin"
+      ? "Администратор"
+      : user.role === "director"
+      ? "Директор"
+      : "Менеджер";
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button className="text-white" data-testid="button-menu">
+          <Menu className="w-6 h-6" />
+        </button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500">
+        <SheetHeader>
+          <SheetTitle className="text-white text-left">
+            <div className="flex items-center space-x-2">
+              {user.profileImage ? (
+                <img
+                  src={user.profileImage}
+                  alt="Фото пользователя"
+                  className="w-10 h-10 rounded-full object-cover bg-white/20"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium">
+                  {user.firstName} {user.middleName} {user.lastName}
+                </p>
+                <p className="text-xs text-white/70">{roleLabel}</p>
+                {user.username && (
+                  <p className="text-xs text-green-50">
+                    Отправить письмо с адреса{" "}
+                    <a
+                      href={`mailto:${user.username}`}
+                      className="underline"
+                      data-testid="user-email-link"
+                    >
+                      {user.username}
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium">
-                {user.firstName} {user.middleName} {user.lastName}
-              </p>
-              <p className="text-xs text-white/70">
-                {roleLabel}
-              </p>
-{/* НОВОЕ: email как mailto-ссылка */}
-{user.username && (
-  <p className="text-xs text-green-50">
-    Отправить письмо с адреса{" "}
-    <a
-      href={`mailto:${user.username}`}
-      className="underline"
-      data-testid="user-email-link"
-    >
-      {user.username}
-    </a>
-  </p>
-)}
-            </div>
-          </div>
-        </SheetTitle>
-      </SheetHeader>
+          </SheetTitle>
+        </SheetHeader>
 
         <div className="mt-8 flex flex-col space-y-2">
           <div className="px-4 py-3 rounded-lg bg-white/10">

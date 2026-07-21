@@ -34,15 +34,6 @@ function getWeekOfMonth(date: Date) {
   return Math.ceil((date.getDate() + offset - 1) / 7);
 }
 
-function isActivityPast(activity: ActivityWithDetails) {
-  const now = new Date();
-
-  const activityDate = new Date(activity.startDate);
-  activityDate.setHours(23, 59, 59, 999);
-
-  return activityDate < now;
-}
-
 function getDatesInRange(start: Date, end: Date): Date[] {
   const dates: Date[] = [];
   const current = new Date(start);
@@ -59,6 +50,9 @@ export default function Admin() {
   const [csvData, setCsvData] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
+  const [uploadTab, setUploadTab] = useState<
+    "employees" | "cities" | "manager-cities" | "holidays" | "managers"
+  >("employees");
 
   const [managerFile, setManagerFile] = useState<File | null>(null);
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
@@ -247,27 +241,6 @@ export default function Admin() {
       toast({
         title: "Ошибка изменения активности",
         description: error.message || "Не удалось изменить активность",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteActivityMutation = useMutation({
-    mutationFn: (id: string) => activityApi.deleteActivity(id),
-    onSuccess: (_data, deletedId) => {
-      queryClient.setQueryData(
-        ["/api/activities/all"],
-        (old: ActivityWithDetails[] | undefined) =>
-          (old ?? []).filter((activity) => activity.id !== deletedId),
-      );
-      toast({
-        title: "Активность удалена",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Ошибка удаления активности",
-        description: error.message || "Не удалось удалить активность",
         variant: "destructive",
       });
     },
@@ -471,203 +444,257 @@ export default function Admin() {
 
         {!isReadOnly && (
           <>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Upload className="w-5 h-5" />
-                  <span>Массовая загрузка МП</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex space-x-2">
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Button
+                variant={uploadTab === "employees" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("employees")}
+                className={uploadTab === "employees" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Массовая загрузка МП
+              </Button>
+              <Button
+                variant={uploadTab === "cities" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("cities")}
+                className={uploadTab === "cities" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Массовая загрузка городов
+              </Button>
+              <Button
+                variant={uploadTab === "manager-cities" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("manager-cities")}
+                className={uploadTab === "manager-cities" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Массовая загрузка городов менеджеров
+              </Button>
+              <Button
+                variant={uploadTab === "holidays" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("holidays")}
+                className={uploadTab === "holidays" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Массовая загрузка праздничных дней
+              </Button>
+              <Button
+                variant={uploadTab === "managers" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("managers")}
+                className={uploadTab === "managers" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Массовая загрузка менеджеров
+              </Button>
+            </div>
+
+            {uploadTab === "employees" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Массовая загрузка МП</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={downloadTemplate}
+                      className="flex items-center space-x-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Скачать шаблон</span>
+                    </Button>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="csv-data">
+                      CSV данные (разделитель - запятая)
+                    </Label>
+                    <Textarea
+                      id="csv-data"
+                      placeholder="firstName,lastName,middleName,phone,email,city,manager,profileImage"
+                      value={csvData}
+                      onChange={(e) => setCsvData(e.target.value)}
+                      rows={6}
+                      className="mt-1"
+                    />
+                  </div>
+
                   <Button
-                    variant="outline"
-                    onClick={downloadTemplate}
-                    className="flex items-center space-x-2"
+                    onClick={handleImport}
+                    disabled={isImporting || !csvData.trim() || isReadOnly}
+                    className="w-full"
                   >
-                    <Download className="w-4 h-4" />
-                    <span>Скачать шаблон</span>
+                    {isImporting ? "Импортирую..." : "Импортировать МП"}
                   </Button>
-                </div>
+                </CardContent>
+              </Card>
+            )}
+            {uploadTab === "cities" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Массовая загрузка городов</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="cities-csv">
+                      CSV города (колонки: name,region)
+                    </Label>
+                    <Textarea
+                      id="cities-csv"
+                      placeholder={`name,region\nМосква,Центральный\nСанкт-Петербург,СЗФО`}
+                      value={citiesCsv}
+                      onChange={(e) => setCitiesCsv(e.target.value)}
+                      rows={6}
+                      className="mt-1"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="csv-data">
-                    CSV данные (разделитель - запятая)
-                  </Label>
-                  <Textarea
-                    id="csv-data"
-                    placeholder="firstName,lastName,middleName,phone,email,city,manager,profileImage"
-                    value={csvData}
-                    onChange={(e) => setCsvData(e.target.value)}
-                    rows={6}
-                    className="mt-1"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleImport}
-                  disabled={isImporting || !csvData.trim() || isReadOnly}
-                  className="w-full"
-                >
-                  {isImporting ? "Импортирую..." : "Импортировать МП"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Upload className="w-5 h-5" />
-                  <span>Массовая загрузка городов</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="cities-csv">
-                    CSV города (колонки: name,region)
-                  </Label>
-                  <Textarea
-                    id="cities-csv"
-                    placeholder={`name,region\nМосква,Центральный\nСанкт-Петербург,СЗФО`}
-                    value={citiesCsv}
-                    onChange={(e) => setCitiesCsv(e.target.value)}
-                    rows={6}
-                    className="mt-1"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleImportCities}
-                  disabled={isImportingCities || !citiesCsv.trim() || isReadOnly}
-                  className="w-full"
-                >
-                  {isImportingCities ? "Импортирую города..." : "Импортировать города"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Upload className="w-5 h-5" />
-                  <span>Массовая загрузка городов менеджеров</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="manager-cities-csv">
-                    CSV связи менеджер ↔ город (колонки: managerEmail,city)
-                  </Label>
-                  <Textarea
-                    id="manager-cities-csv"
-                    placeholder={`managerEmail,city\nt.tolmacheva@sls-pharma.ru,Барнаул\nn.pervakova@sls-pharma.ru,Волгоград`}
-                    value={managerCitiesCsv}
-                    onChange={(e) => setManagerCitiesCsv(e.target.value)}
-                    rows={6}
-                    className="mt-1"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleImportManagerCities}
-                  disabled={
-                    isImportingManagerCities ||
-                    !managerCitiesCsv.trim() ||
-                    isReadOnly
-                  }
-                  className="w-full"
-                >
-                  {isImportingManagerCities
-                    ? "Импортирую связи..."
-                    : "Импортировать города менеджеров"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Upload className="w-5 h-5" />
-                  <span>Массовая загрузка праздничных дней</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="holidays-csv">
-                    CSV праздники (колонки: date,name)
-                  </Label>
-                  <Textarea
-                    id="holidays-csv"
-                    placeholder={`date,name\n2026-01-01,Новый год\n2026-01-07,Рождество`}
-                    value={holidaysCsv}
-                    onChange={(e) => setHolidaysCsv(e.target.value)}
-                    rows={6}
-                    className="mt-1"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleImportHolidays}
-                  disabled={isImportingHolidays || !holidaysCsv.trim() || isReadOnly}
-                  className="w-full"
-                >
-                  {isImportingHolidays
-                    ? "Импортирую праздники..."
-                    : "Импортировать праздники"}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Upload className="w-5 h-5" />
-                  <span>Массовая загрузка менеджеров</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="manager-role">Роль для импорта</Label>
-                  <select
-                    id="manager-role"
-                    value={managerRole}
-                    onChange={(e) =>
-                      setManagerRole(e.target.value as "manager" | "admin")
-                    }
-                    className="w-full border rounded px-2 py-1 text-sm"
-                    disabled={isReadOnly}
+                  <Button
+                    onClick={handleImportCities}
+                    disabled={isImportingCities || !citiesCsv.trim() || isReadOnly}
+                    className="w-full"
                   >
-                    <option value="manager">Менеджер</option>
-                    <option value="admin">Администратор</option>
-                  </select>
-                </div>
+                    {isImportingCities ? "Импортирую города..." : "Импортировать города"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {uploadTab === "manager-cities" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Массовая загрузка городов менеджеров</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="manager-cities-csv">
+                      CSV связи менеджер ↔ город (колонки: managerEmail,city)
+                    </Label>
+                    <Textarea
+                      id="manager-cities-csv"
+                      placeholder={`managerEmail,city\nt.tolmacheva@sls-pharma.ru,Барнаул\nn.pervakova@sls-pharma.ru,Волгоград`}
+                      value={managerCitiesCsv}
+                      onChange={(e) => setManagerCitiesCsv(e.target.value)}
+                      rows={6}
+                      className="mt-1"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="manager-file">CSV файл менеджеров</Label>
-                  <Input
-                    id="manager-file"
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
-                    disabled={isReadOnly}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Ожидаются колонки:
-                    username,password,firstName,lastName,middleName,profileImage
-                  </p>
-                </div>
+                  <Button
+                    onClick={handleImportManagerCities}
+                    disabled={
+                      isImportingManagerCities ||
+                      !managerCitiesCsv.trim() ||
+                      isReadOnly
+                    }
+                    className="w-full"
+                  >
+                    {isImportingManagerCities
+                      ? "Импортирую связи..."
+                      : "Импортировать города менеджеров"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {uploadTab === "holidays" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Массовая загрузка праздничных дней</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="holidays-csv">
+                      CSV праздники (колонки: date,name)
+                    </Label>
+                    <Textarea
+                      id="holidays-csv"
+                      placeholder={`date,name\n2026-01-01,Новый год\n2026-01-07,Рождество`}
+                      value={holidaysCsv}
+                      onChange={(e) => setHolidaysCsv(e.target.value)}
+                      rows={6}
+                      className="mt-1"
+                    />
+                  </div>
 
-                <Button
-                  onClick={handleImportManagers}
-                  disabled={isImportingManagers || !managerFile || isReadOnly}
-                  className="w-full"
-                >
-                  {isImportingManagers
-                    ? "Импортирую менеджеров..."
-                    : "Импортировать менеджеров"}
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button
+                    onClick={handleImportHolidays}
+                    disabled={isImportingHolidays || !holidaysCsv.trim() || isReadOnly}
+                    className="w-full"
+                  >
+                    {isImportingHolidays
+                      ? "Импортирую праздники..."
+                      : "Импортировать праздники"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {uploadTab === "managers" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Массовая загрузка менеджеров</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="manager-role">Роль для импорта</Label>
+                    <select
+                      id="manager-role"
+                      value={managerRole}
+                      onChange={(e) =>
+                        setManagerRole(e.target.value as "manager" | "admin")
+                      }
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      disabled={isReadOnly}
+                    >
+                      <option value="manager">Менеджер</option>
+                      <option value="admin">Администратор</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="manager-file">CSV файл менеджеров</Label>
+                    <Input
+                      id="manager-file"
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
+                      disabled={isReadOnly}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ожидаются колонки:
+                      username,password,firstName,lastName,middleName,profileImage
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={handleImportManagers}
+                    disabled={isImportingManagers || !managerFile || isReadOnly}
+                    className="w-full"
+                  >
+                    {isImportingManagers
+                      ? "Импортирую менеджеров..."
+                      : "Импортировать менеджеров"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
 
@@ -873,13 +900,10 @@ export default function Admin() {
                                   Нет активностей
                                 </p>
                               ) : (
-                                dayActivities.map((activity) => {
-                                  const isPast = isActivityPast(activity);
-
-                                  return (
+                                dayActivities.map((activity) => (
                                     <div
                                       key={activity.id}
-                                      className="flex items-center justify-between p-3 border rounded-lg"
+                                      className="p-3 border rounded-lg"
                                     >
                                       <div className="flex flex-col">
                                         <p className="font-medium">
@@ -911,24 +935,8 @@ export default function Admin() {
                                           • менеджер: {activity.managerName}
                                         </p>
                                       </div>
-                                      <div className="flex items-center space-x-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          disabled={isPast || isReadOnly}
-                                          onClick={() => {
-                                            if (isPast || isReadOnly) return;
-                                            deleteActivityMutation.mutate(
-                                              activity.id,
-                                            );
-                                          }}
-                                        >
-                                          Удалить
-                                        </Button>
-                                      </div>
                                     </div>
-                                  );
-                                })
+                                  ))
                               )}
                             </div>
                           );
