@@ -8,20 +8,64 @@ import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import type { ActivityWithDetails } from "@shared/schema";
 
-function getMonthRange(date: Date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-  return { start, end };
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTH_NAMES = [
   "Январь","Февраль","Март","Апрель","Май","Июнь",
   "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь",
 ];
 
+const MONTH_NAMES_GEN = [
+  "января","февраля","марта","апреля","мая","июня",
+  "июля","августа","сентября","октября","ноября","декабря",
+];
+
+function getMonthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  const end   = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+  return { start, end };
+}
+
+/** Возвращает понедельник недели, в которую попадает date */
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=вс
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getWeekRange(weekStart: Date) {
+  const start = new Date(weekStart);
+  const end   = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function formatWeekLabel(weekStart: Date): string {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const sDay = weekStart.getDate();
+  const eDay = end.getDate();
+  const sMon = MONTH_NAMES_GEN[weekStart.getMonth()];
+  const eMon = MONTH_NAMES_GEN[end.getMonth()];
+  const yr   = end.getFullYear();
+  if (weekStart.getMonth() === end.getMonth()) {
+    return `${sDay}–${eDay} ${sMon} ${yr}`;
+  }
+  return `${sDay} ${sMon} – ${eDay} ${eMon} ${yr}`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function Reports() {
   const { user } = useAuth();
+
+  const [period, setPeriod]       = useState<"month" | "week">("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
 
   if (user?.role !== "admin" && user?.role !== "director") {
     return (
@@ -42,77 +86,71 @@ export default function Reports() {
     queryFn: () => employeeApi.getAllEmployees(),
   });
 
-  const { start, end } = getMonthRange(currentDate);
+  // ── Диапазон и фильтрация ──
+  const range = period === "month"
+    ? getMonthRange(currentDate)
+    : getWeekRange(weekStart);
 
-  const activitiesThisMonth: ActivityWithDetails[] = allActivities.filter((activity) => {
-    const startDate = new Date(activity.startDate);
-    return startDate >= start && startDate <= end;
+  const activitiesInRange: ActivityWithDetails[] = allActivities.filter((a) => {
+    const d = new Date(a.startDate);
+    return d >= range.start && d <= range.end;
   });
 
-  // ── По менеджерам ──────────────────────────────────────────────
-  type ManagerStat = {
-    managerName: string;
-    count: number;
-    cities: Set<string>;
-    employees: Set<string>;
-  };
-
-  const managersStats = activitiesThisMonth.reduce<Record<string, ManagerStat>>(
-    (acc, activity) => {
-      const managerName = activity.managerName || "Не указан";
-      if (!acc[managerName]) {
-        acc[managerName] = { managerName, count: 0, cities: new Set(), employees: new Set() };
-      }
-      acc[managerName].count += 1;
-      if (activity.city?.name) acc[managerName].cities.add(activity.city.name);
-      if (activity.employeeId) acc[managerName].employees.add(activity.employeeId);
-      return acc;
-    },
-    {},
-  );
+  // ── По менеджерам ──
+  type ManagerStat = { managerName: string; count: number; cities: Set<string>; employees: Set<string> };
+  const managersStats = activitiesInRange.reduce<Record<string, ManagerStat>>((acc, a) => {
+    const key = a.managerName || "Не указан";
+    if (!acc[key]) acc[key] = { managerName: key, count: 0, cities: new Set(), employees: new Set() };
+    acc[key].count += 1;
+    if (a.city?.name)   acc[key].cities.add(a.city.name);
+    if (a.employeeId)   acc[key].employees.add(a.employeeId);
+    return acc;
+  }, {});
   const managersArray = Object.values(managersStats).sort((a, b) => b.count - a.count);
 
-  // ── По типам активностей ───────────────────────────────────────
+  // ── По типам ──
   type TypeStat = { typeName: string; count: number; managers: Set<string> };
-  const typesStats = activitiesThisMonth.reduce<Record<string, TypeStat>>(
-    (acc, activity) => {
-      const typeName = activity.type?.name || "Не указан";
-      if (!acc[typeName]) {
-        acc[typeName] = { typeName, count: 0, managers: new Set() };
-      }
-      acc[typeName].count += 1;
-      if (activity.managerName) acc[typeName].managers.add(activity.managerName);
-      return acc;
-    },
-    {},
-  );
+  const typesStats = activitiesInRange.reduce<Record<string, TypeStat>>((acc, a) => {
+    const key = a.type?.name || "Не указан";
+    if (!acc[key]) acc[key] = { typeName: key, count: 0, managers: new Set() };
+    acc[key].count += 1;
+    if (a.managerName) acc[key].managers.add(a.managerName);
+    return acc;
+  }, {});
   const typesArray = Object.values(typesStats).sort((a, b) => b.count - a.count);
 
-  // ── По городам ────────────────────────────────────────────────
+  // ── По городам ──
   type CityStat = { cityName: string; count: number; managers: Set<string> };
-  const citiesStats = activitiesThisMonth.reduce<Record<string, CityStat>>(
-    (acc, activity) => {
-      const cityName = activity.city?.name || "Не указан";
-      if (!acc[cityName]) {
-        acc[cityName] = { cityName, count: 0, managers: new Set() };
-      }
-      acc[cityName].count += 1;
-      if (activity.managerName) acc[cityName].managers.add(activity.managerName);
-      return acc;
-    },
-    {},
-  );
+  const citiesStats = activitiesInRange.reduce<Record<string, CityStat>>((acc, a) => {
+    const key = a.city?.name || "Не указан";
+    if (!acc[key]) acc[key] = { cityName: key, count: 0, managers: new Set() };
+    acc[key].count += 1;
+    if (a.managerName) acc[key].managers.add(a.managerName);
+    return acc;
+  }, {});
   const citiesArray = Object.values(citiesStats).sort((a, b) => b.count - a.count);
 
   const isLoading = activitiesLoading || employeesLoading;
 
-  // ── Навигация по месяцам ──────────────────────────────────────
-  function prevMonth() {
-    setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  // ── Навигация ──
+  function prevPeriod() {
+    if (period === "month") {
+      setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    } else {
+      setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() - 7); return d; });
+    }
   }
-  function nextMonth() {
-    setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  function nextPeriod() {
+    if (period === "month") {
+      setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    } else {
+      setWeekStart((w) => { const d = new Date(w); d.setDate(d.getDate() + 7); return d; });
+    }
   }
+
+  const periodLabel = period === "month"
+    ? `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+    : formatWeekLabel(weekStart);
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,29 +162,48 @@ export default function Reports() {
       </header>
 
       <div className="p-4 pb-24">
-        {/* Month selector */}
-        <div className="flex items-center justify-center gap-4 mb-6">
+
+        {/* Переключатель Месяц / Неделя */}
+        <div className="flex bg-muted rounded-lg p-1 mb-5">
           <button
-            onClick={prevMonth}
-            className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            onClick={() => setPeriod("month")}
+            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-all ${
+              period === "month" ? "bg-background shadow text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Месяц
+          </button>
+          <button
+            onClick={() => setPeriod("week")}
+            className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-all ${
+              period === "week" ? "bg-background shadow text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Неделя
+          </button>
+        </div>
+
+        {/* Навигатор периода */}
+        <div className="flex items-center justify-center gap-4 mb-5">
+          <button
+            onClick={prevPeriod}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground text-xl"
           >
             ‹
           </button>
-          <span className="text-base font-medium min-w-[160px] text-center">
-            {MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </span>
+          <span className="text-sm font-semibold min-w-[180px] text-center">{periodLabel}</span>
           <button
-            onClick={nextMonth}
-            className="p-2 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            onClick={nextPeriod}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors text-muted-foreground hover:text-foreground text-xl"
           >
             ›
           </button>
         </div>
 
-        {/* Summary badges */}
+        {/* Сводные плашки */}
         <div className="flex gap-3 mb-6 flex-wrap">
           <div className="flex-1 min-w-[100px] bg-blue-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-blue-600">{activitiesThisMonth.length}</div>
+            <div className="text-2xl font-bold text-blue-600">{activitiesInRange.length}</div>
             <div className="text-xs text-blue-500 mt-0.5">Активностей</div>
           </div>
           <div className="flex-1 min-w-[100px] bg-emerald-50 rounded-xl p-3 text-center">
@@ -163,11 +220,11 @@ export default function Reports() {
         <Tabs defaultValue="managers">
           <TabsList className="w-full mb-4">
             <TabsTrigger value="managers" className="flex-1 text-xs">По менеджерам</TabsTrigger>
-            <TabsTrigger value="types" className="flex-1 text-xs">По типам</TabsTrigger>
-            <TabsTrigger value="cities" className="flex-1 text-xs">По городам</TabsTrigger>
+            <TabsTrigger value="types"    className="flex-1 text-xs">По типам</TabsTrigger>
+            <TabsTrigger value="cities"   className="flex-1 text-xs">По городам</TabsTrigger>
           </TabsList>
 
-          {/* ── Вкладка: По менеджерам ── */}
+          {/* ── По менеджерам ── */}
           <TabsContent value="managers">
             <Card>
               <CardHeader className="pb-2">
@@ -218,7 +275,7 @@ export default function Reports() {
             </Card>
           </TabsContent>
 
-          {/* ── Вкладка: По типам ── */}
+          {/* ── По типам ── */}
           <TabsContent value="types">
             <Card>
               <CardHeader className="pb-2">
@@ -236,27 +293,22 @@ export default function Reports() {
                 ) : (
                   <div className="space-y-2">
                     {typesArray.map((stat) => {
-                      const pct = activitiesThisMonth.length
-                        ? Math.round((stat.count / activitiesThisMonth.length) * 100)
+                      const pct = activitiesInRange.length
+                        ? Math.round((stat.count / activitiesInRange.length) * 100)
                         : 0;
                       return (
                         <div key={stat.typeName}>
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span className="font-medium truncate pr-2">{stat.typeName}</span>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-muted-foreground text-xs">
-                                {stat.managers.size} мен.
-                              </span>
+                              <span className="text-muted-foreground text-xs">{stat.managers.size} мен.</span>
                               <span className="inline-block bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 text-xs font-semibold min-w-[32px] text-center">
                                 {stat.count}
                               </span>
                             </div>
                           </div>
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-violet-400 rounded-full transition-all"
-                              style={{ width: `${pct}%` }}
-                            />
+                            <div className="h-full bg-violet-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
@@ -267,7 +319,7 @@ export default function Reports() {
             </Card>
           </TabsContent>
 
-          {/* ── Вкладка: По городам ── */}
+          {/* ── По городам ── */}
           <TabsContent value="cities">
             <Card>
               <CardHeader className="pb-2">
@@ -285,27 +337,22 @@ export default function Reports() {
                 ) : (
                   <div className="space-y-2">
                     {citiesArray.map((stat) => {
-                      const pct = activitiesThisMonth.length
-                        ? Math.round((stat.count / activitiesThisMonth.length) * 100)
+                      const pct = activitiesInRange.length
+                        ? Math.round((stat.count / activitiesInRange.length) * 100)
                         : 0;
                       return (
                         <div key={stat.cityName}>
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span className="font-medium truncate pr-2">{stat.cityName}</span>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-muted-foreground text-xs">
-                                {stat.managers.size} ТМ.
-                              </span>
+                              <span className="text-muted-foreground text-xs">{stat.managers.size} мен.</span>
                               <span className="inline-block bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 text-xs font-semibold min-w-[32px] text-center">
                                 {stat.count}
                               </span>
                             </div>
                           </div>
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-emerald-400 rounded-full transition-all"
-                              style={{ width: `${pct}%` }}
-                            />
+                            <div className="h-full bg-emerald-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
