@@ -184,35 +184,25 @@ export default function Dashboard() {
     enabled: isPrivileged,
   });
 
-  // Activities
+  // Activities: один источник данных для всех ролей
   const {
-    data: ownActivities = [],
-    isLoading: ownLoading,
+    data: activities = [],
+    isLoading: activitiesLoading,
+    error: activitiesError,
   } = useQuery({
-    queryKey: ["/api/activities/user", user?.id, startDate.toISOString(), endDate.toISOString()],
-    queryFn: () =>
-      activityApi.getActivitiesByUser(user!.id, {
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      }),
+    queryKey: ["supabase/activities/all", startDate.toISOString(), endDate.toISOString()],
+    queryFn: () => activityApi.getAllActivities(startDate, endDate),
     enabled: !!user?.id,
   });
 
-  const {
-    data: allActivities = [],
-    isLoading: allLoading,
-  } = useQuery({
-    queryKey: ["/api/activities/all", startDate.toISOString(), endDate.toISOString()],
-    queryFn: () => activityApi.getAllActivities(startDate, endDate),
-    enabled: isPrivileged,
-  });
-
-  // Calendar stats (for manager view)
+  // Calendar stats: остаётся только для менеджера,
+  // админ/директор сейчас тоже могут использовать общий календарь из activities
   const {
     data: calendarStatsData = { items: [] as CalendarStats[] },
     isLoading: isCalendarLoading,
+    error: calendarError,
   } = useQuery({
-    queryKey: ["/api/activities/calendar/user", user?.id, startDate, endDate],
+    queryKey: ["supabase/activities/calendar/user", user?.id, startDate, endDate],
     queryFn: () => activityApi.getActivityCalendarStatsByUser(user!.id, startDate, endDate),
     enabled: !!user?.id,
   });
@@ -221,19 +211,24 @@ export default function Dashboard() {
   const calendarYear = currentDate.getFullYear();
   const { data: calendarHolidays = [] } = useQuery({
     queryKey: ["/api/holidays", calendarYear],
-    queryFn: () => holidaysApi.getHolidaysForYear(calendarYear) as Promise<{ date: string; name: string }[]>,
+    queryFn: () =>
+      holidaysApi.getHolidaysForYear(calendarYear) as Promise<{ date: string; name: string }[]>,
   });
 
   const holidayDates = useMemo(
     () =>
       new Set(
-        calendarHolidays.map((h: any) => new Date(h.date).toISOString().slice(0, 10)),
+        (Array.isArray(calendarHolidays) ? calendarHolidays : []).map(
+          (h: any) => new Date(h.date).toISOString().slice(0, 10),
+        ),
       ),
     [calendarHolidays],
   );
 
   // ── Data for view ───────────────────────────────────────────
-  const baseActivities = isPrivileged ? allActivities : ownActivities;
+  const baseActivities = activities;
+  const isLoading = activitiesLoading;
+  const hasError = activitiesError || calendarError;
 
   const filteredActivities = useMemo(() => {
     let list = [...baseActivities];
@@ -499,8 +494,6 @@ export default function Dashboard() {
     );
   }
 
-  const isLoading = isPrivileged ? allLoading : ownLoading;
-
   return (
     <div className="min-h-screen pb-20">
       {/* Header */}
@@ -641,7 +634,12 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportActivitiesToCsv(filteredActivities, `activities_${format(currentDate, "yyyy-MM", { locale: ru })}.csv`)}
+              onClick={() =>
+                exportActivitiesToCsv(
+                  filteredActivities,
+                  `activities_${format(currentDate, "yyyy-MM", { locale: ru })}.csv`,
+                )
+              }
             >
               <Download className="w-4 h-4 mr-1" /> CSV
             </Button>
@@ -705,7 +703,9 @@ export default function Dashboard() {
                 <SelectContent>
                   <SelectItem value="all">Все статусы</SelectItem>
                   {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                    <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                    <SelectItem key={key} value={key}>
+                      {cfg.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -717,7 +717,9 @@ export default function Dashboard() {
                 <SelectContent>
                   <SelectItem value="all">Все типы</SelectItem>
                   {uniqueTypes.map(([id, name]) => (
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                    <SelectItem key={id} value={id}>
+                      {name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -729,7 +731,9 @@ export default function Dashboard() {
                 <SelectContent>
                   <SelectItem value="all">Все города</SelectItem>
                   {uniqueCities.map(([id, name]) => (
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                    <SelectItem key={id} value={id}>
+                      {name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -741,10 +745,18 @@ export default function Dashboard() {
             <span className="text-sm text-muted-foreground">Группировать:</span>
             <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)} className="w-auto">
               <TabsList className="h-8">
-                <TabsTrigger value="date" className="text-xs px-2">По датам</TabsTrigger>
-                <TabsTrigger value="manager" className="text-xs px-2">По менеджерам</TabsTrigger>
-                <TabsTrigger value="type" className="text-xs px-2">По типам</TabsTrigger>
-                <TabsTrigger value="city" className="text-xs px-2">По городам</TabsTrigger>
+                <TabsTrigger value="date" className="text-xs px-2">
+                  По датам
+                </TabsTrigger>
+                <TabsTrigger value="manager" className="text-xs px-2">
+                  По менеджерам
+                </TabsTrigger>
+                <TabsTrigger value="type" className="text-xs px-2">
+                  По типам
+                </TabsTrigger>
+                <TabsTrigger value="city" className="text-xs px-2">
+                  По городам
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -754,7 +766,13 @@ export default function Dashboard() {
       {/* Main content */}
       {viewMode === "list" ? (
         <div className="px-4">
-          {isLoading ? (
+          {hasError ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                Ошибка загрузки активностей. Попробуйте обновить страницу или проверьте права в Supabase.
+              </p>
+            </div>
+          ) : isLoading ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">Загрузка активностей...</p>
             </div>
@@ -802,9 +820,13 @@ export default function Dashboard() {
                       >
                         {groupTitle}
                         {isTodayGroup && (
-                          <span className="ml-2 text-xs font-normal uppercase tracking-wide">Сегодня</span>
+                          <span className="ml-2 text-xs font-normal uppercase tracking-wide">
+                            Сегодня
+                          </span>
                         )}
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">({dayActivities.length})</span>
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          ({dayActivities.length})
+                        </span>
                       </h5>
 
                       <div className="space-y-2 pb-2 px-2">
@@ -837,7 +859,13 @@ export default function Dashboard() {
         </div>
       ) : viewMode === "calendar" ? (
         <div className="px-4 py-4">
-          {isLoading ? (
+          {hasError ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                Ошибка загрузки календаря. Проверьте функцию get_activity_calendar_stats_by_user и права на таблицы.
+              </p>
+            </div>
+          ) : isLoading || isCalendarLoading ? (
             <div className="text-center py-8">
               <p className="text-muted-foreground">Загрузка календаря...</p>
             </div>
@@ -845,7 +873,9 @@ export default function Dashboard() {
             <>
               <div className="grid grid-cols-7 text-xs text-muted-foreground mb-2">
                 {["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((d) => (
-                  <div key={d} className="text-center">{d}</div>
+                  <div key={d} className="text-center">
+                    {d}
+                  </div>
                 ))}
               </div>
 
@@ -868,7 +898,13 @@ export default function Dashboard() {
                           className={[
                             "border rounded-md p-1 min-h-[60px] flex flex-col",
                             isToday ? "border-blue-header text-blue-header" : "",
-                            isHoliday ? "bg-orange-100" : isWeekend ? "bg-red-100" : inCurrentMonth ? "bg-card" : "bg-muted/40",
+                            isHoliday
+                              ? "bg-orange-100"
+                              : isWeekend
+                              ? "bg-red-100"
+                              : inCurrentMonth
+                              ? "bg-card"
+                              : "bg-muted/40",
                           ].join(" ")}
                         >
                           <div
@@ -884,35 +920,48 @@ export default function Dashboard() {
                             <div className="mt-auto space-y-0.5 text-[10px]">
                               {stats.planned > 0 && (
                                 <div className="flex items-center justify-between text-blue-600">
-                                  <span>План</span><span>{stats.planned}</span>
+                                  <span>План</span>
+                                  <span>{stats.planned}</span>
                                 </div>
                               )}
                               {stats.inProgress > 0 && (
                                 <div className="flex items-center justify-between text-amber-600">
-                                  <span>В пр</span><span>{stats.inProgress}</span>
+                                  <span>В пр</span>
+                                  <span>{stats.inProgress}</span>
                                 </div>
                               )}
                               {stats.completed > 0 && (
                                 <div className="flex items-center justify-between text-emerald-600">
-                                  <span>Вып</span><span>{stats.completed}</span>
+                                  <span>Вып</span>
+                                  <span>{stats.completed}</span>
                                 </div>
                               )}
                               {stats.cancelled > 0 && (
                                 <div className="flex items-center justify-between text-red-600">
-                                  <span>Отм</span><span>{stats.cancelled}</span>
+                                  <span>Отм</span>
+                                  <span>{stats.cancelled}</span>
                                 </div>
                               )}
                               {stats.rescheduled > 0 && (
                                 <div className="flex items-center justify-between text-violet-600">
-                                  <span>Перен</span><span>{stats.rescheduled}</span>
+                                  <span>Перен</span>
+                                  <span>{stats.rescheduled}</span>
                                 </div>
                               )}
-                              {stats.planned === 0 && stats.inProgress === 0 && stats.completed === 0 && stats.cancelled === 0 && stats.rescheduled === 0 && (
-                                <div className="text-[10px] text-muted-foreground text-center">—</div>
-                              )}
+                              {stats.planned === 0 &&
+                                stats.inProgress === 0 &&
+                                stats.completed === 0 &&
+                                stats.cancelled === 0 &&
+                                stats.rescheduled === 0 && (
+                                  <div className="text-[10px] text-muted-foreground text-center">
+                                    —
+                                  </div>
+                                )}
                             </div>
                           ) : (
-                            <div className="mt-auto text-[10px] text-muted-foreground text-center">—</div>
+                            <div className="mt-auto text-[10px] text-muted-foreground text-center">
+                              —
+                            </div>
                           )}
                         </div>
                       );
@@ -922,22 +971,55 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600" /><span>План</span></div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /><span>В процессе</span></div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600" /><span>Выполнено</span></div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600" /><span>Отменено</span></div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" /><span>Перенесено</span></div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-600" />
+                  <span>План</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>В процессе</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span>Выполнено</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-600" />
+                  <span>Отменено</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                  <span>Перенесено</span>
+                </div>
               </div>
 
               {calendarStatsData.items.length > 0 && !isPrivileged && (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  Период: {format(startDate, "dd.MM.yyyy", { locale: ru })} — {format(endDate, "dd.MM.yyyy", { locale: ru })}
+                  Период: {format(startDate, "dd.MM.yyyy", { locale: ru })} —{" "}
+                  {format(endDate, "dd.MM.yyyy", { locale: ru })}
                   <br />
-                  Занятых дней: {calendarStatsData.items.filter((d) => d.planned + d.inProgress + d.completed + d.rescheduled + d.cancelled > 0).length}
+                  Занятых дней:{" "}
+                  {calendarStatsData.items.filter(
+                    (d) =>
+                      d.planned +
+                        d.inProgress +
+                        d.completed +
+                        d.rescheduled +
+                        d.cancelled >
+                      0,
+                  ).length}
                   <br />
-                  Плановых активностей (по дням): {calendarStatsData.items.reduce((sum, d) => sum + d.planned, 0)}
+                  Плановых активностей (по дням):{" "}
+                  {calendarStatsData.items.reduce(
+                    (sum, d) => sum + d.planned,
+                    0,
+                  )}
                   <br />
-                  Завершённых активностей (по дням): {calendarStatsData.items.reduce((sum, d) => sum + d.completed, 0)}
+                  Завершённых активностей (по дням):{" "}
+                  {calendarStatsData.items.reduce(
+                    (sum, d) => sum + d.completed,
+                    0,
+                  )}
                 </div>
               )}
             </>
@@ -993,7 +1075,15 @@ export default function Dashboard() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={statusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                    <Pie
+                      data={statusChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      label
+                    >
                       {statusChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
@@ -1011,7 +1101,9 @@ export default function Dashboard() {
                     <div key={key}>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="font-medium">{cfg.label}</span>
-                        <span className="text-muted-foreground">{count} ({pct}%)</span>
+                        <span className="text-muted-foreground">
+                          {count} ({pct}%)
+                        </span>
                       </div>
                       <Progress value={pct} className="h-2" />
                     </div>
@@ -1029,12 +1121,25 @@ export default function Dashboard() {
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={managerChartData} layout="vertical" margin={{ left: 20 }}>
+                    <BarChart
+                      data={managerChartData}
+                      layout="vertical"
+                      margin={{ left: 20 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" />
-                      <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 11 }} />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={120}
+                        tick={{ fontSize: 11 }}
+                      />
                       <Tooltip />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                      <Bar
+                        dataKey="value"
+                        fill="#3b82f6"
+                        radius={[0, 4, 4, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.jpg";
+import { supabase } from "@/supabase";
+import type { User } from "@shared/schema";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(""); // сюда вводим email
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,30 +23,91 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
+      const email = username.trim();
+      const pwd = password;
+
+      // 1. Логин через Supabase Auth (email + пароль)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pwd,
       });
 
-      if (response.ok) {
-        const user = await response.json();
-        login(user);
-        toast({
-          title: "Вход выполнен успешно",
-          description: `Добро пожаловать, ${user.firstName} ${user.middleName} ${user.lastName}!`,
-        });
-      } else {
-        const error = await response.json();
+      if (error) {
         toast({
           title: "Ошибка входа",
           description: error.message || "Неверный логин или пароль",
           variant: "destructive",
         });
+        return;
       }
-    } catch (error) {
+
+      if (!data.user) {
+        toast({
+          title: "Ошибка входа",
+          description: "Пользователь не найден",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2. Загрузка профиля пользователя из таблицы public.users
+      const { data: profiles, error: profileError } = await supabase
+        .from("users")   // твоя таблица в схеме public
+        .select("*")
+        .eq("email", email)
+        .limit(1);       // безопаснее, чем .single()
+
+      if (profileError) {
+        toast({
+          title: "Ошибка профиля",
+          description:
+            profileError.message ||
+            "Не удалось загрузить профиль пользователя. Обратитесь к администратору.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!profiles || profiles.length === 0) {
+        toast({
+          title: "Профиль не найден",
+          description:
+            "Для этого email нет профиля в таблице users. Обратитесь к администратору.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const profile = profiles[0];
+
+      // 3. Формируем объект User под @shared/schema
+      const user: User = {
+        id: profile.id,                 // number
+        username: profile.username,     // логин (например, 'admin', 'pervakov')
+        role: profile.role,             // роль ('admin', 'tm' и т.п.)
+
+        firstName: profile.first_name ?? "",
+        middleName: profile.middle_name ?? "",
+        lastName: profile.last_name ?? "",
+        email: profile.email ?? email,
+
+        // если в типе User есть дополнительные поля, можно добавить их:
+        // profileImage: profile.profile_image ?? null,
+        // cityId: profile.city_id ?? null,
+        // createdAt: profile.created_at ?? null,
+      };
+
+      // 4. Сохраняем пользователя в контекст и localStorage
+      login(user);
+
+      toast({
+        title: "Вход выполнен успешно",
+        description:
+          user.firstName || user.lastName
+            ? `Добро пожаловать, ${user.firstName} ${user.middleName} ${user.lastName}!`
+            : `Добро пожаловать, ${user.username}!`,
+      });
+    } catch {
       toast({
         title: "Ошибка",
         description: "Не удалось выполнить вход. Попробуйте еще раз.",
@@ -88,11 +151,11 @@ export default function Login() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Логин</Label>
+                <Label htmlFor="username">Логин (email)</Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Введите логин"
+                  placeholder="Введите email"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, Download, Users, Settings } from "lucide-react";
+import { Upload, Download, Users, Settings, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,14 +55,17 @@ export default function Admin() {
   >("employees");
 
   const [managerFile, setManagerFile] = useState<File | null>(null);
-  const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
+  const [managerRole, setManagerRole] = useState<"manager" | "admin">(
+    "manager",
+  );
   const [isImportingManagers, setIsImportingManagers] = useState(false);
 
   const [citiesCsv, setCitiesCsv] = useState("");
   const [isImportingCities, setIsImportingCities] = useState(false);
 
   const [managerCitiesCsv, setManagerCitiesCsv] = useState("");
-  const [isImportingManagerCities, setIsImportingManagerCities] = useState(false);
+  const [isImportingManagerCities, setIsImportingManagerCities] =
+    useState(false);
 
   const [holidaysCsv, setHolidaysCsv] = useState("");
   const [isImportingHolidays, setIsImportingHolidays] = useState(false);
@@ -71,7 +74,8 @@ export default function Admin() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [currentDate] = useState(() => new Date());
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const isReadOnly = user?.role === "director";
 
   // выбранный менеджер для фильтра
@@ -101,10 +105,7 @@ export default function Admin() {
     queryFn: () => userApi.getManagersList(),
   });
 
-  const {
-    data: allActivities = [],
-    isLoading: activitiesLoading,
-  } = useQuery({
+  const { data: allActivities = [], isLoading: activitiesLoading } = useQuery({
     queryKey: ["/api/activities/all"],
     queryFn: () => activityApi.getAllActivities(),
   });
@@ -217,6 +218,21 @@ export default function Admin() {
       toast({
         title: "Ошибка удаления менеджера",
         description: error.message || "Не удалось удалить менеджера",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteActivityMutation = useMutation({
+    mutationFn: (id: string) => activityApi.deleteActivity(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      toast({ title: "Активность удалена" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка удаления активности",
+        description: error.message || "Не удалось удалить активность",
         variant: "destructive",
       });
     },
@@ -421,9 +437,7 @@ export default function Admin() {
                 <Users className="w-5 h-5 text-blue-600" />
                 <div>
                   <p className="text-sm text-muted-foreground">Всего МП</p>
-                  <p className="text-xl font-semibold">
-                    {allEmployees.length}
-                  </p>
+                  <p className="text-xl font-semibold">{allEmployees.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -449,7 +463,11 @@ export default function Admin() {
                 variant={uploadTab === "employees" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUploadTab("employees")}
-                className={uploadTab === "employees" ? "bg-blue-header hover:bg-blue-700" : ""}
+                className={
+                  uploadTab === "employees"
+                    ? "bg-blue-header hover:bg-blue-700"
+                    : ""
+                }
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка МП
@@ -458,7 +476,11 @@ export default function Admin() {
                 variant={uploadTab === "cities" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUploadTab("cities")}
-                className={uploadTab === "cities" ? "bg-blue-header hover:bg-blue-700" : ""}
+                className={
+                  uploadTab === "cities"
+                    ? "bg-blue-header hover:bg-blue-700"
+                    : ""
+                }
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка городов
@@ -467,7 +489,11 @@ export default function Admin() {
                 variant={uploadTab === "manager-cities" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUploadTab("manager-cities")}
-                className={uploadTab === "manager-cities" ? "bg-blue-header hover:bg-blue-700" : ""}
+                className={
+                  uploadTab === "manager-cities"
+                    ? "bg-blue-header hover:bg-blue-700"
+                    : ""
+                }
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка городов менеджеров
@@ -476,7 +502,11 @@ export default function Admin() {
                 variant={uploadTab === "holidays" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUploadTab("holidays")}
-                className={uploadTab === "holidays" ? "bg-blue-header hover:bg-blue-700" : ""}
+                className={
+                  uploadTab === "holidays"
+                    ? "bg-blue-header hover:bg-blue-700"
+                    : ""
+                }
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка праздничных дней
@@ -485,7 +515,11 @@ export default function Admin() {
                 variant={uploadTab === "managers" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setUploadTab("managers")}
-                className={uploadTab === "managers" ? "bg-blue-header hover:bg-blue-700" : ""}
+                className={
+                  uploadTab === "managers"
+                    ? "bg-blue-header hover:bg-blue-700"
+                    : ""
+                }
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка менеджеров
@@ -561,10 +595,14 @@ export default function Admin() {
 
                   <Button
                     onClick={handleImportCities}
-                    disabled={isImportingCities || !citiesCsv.trim() || isReadOnly}
+                    disabled={
+                      isImportingCities || !citiesCsv.trim() || isReadOnly
+                    }
                     className="w-full"
                   >
-                    {isImportingCities ? "Импортирую города..." : "Импортировать города"}
+                    {isImportingCities
+                      ? "Импортирую города..."
+                      : "Импортировать города"}
                   </Button>
                 </CardContent>
               </Card>
@@ -633,7 +671,9 @@ export default function Admin() {
 
                   <Button
                     onClick={handleImportHolidays}
-                    disabled={isImportingHolidays || !holidaysCsv.trim() || isReadOnly}
+                    disabled={
+                      isImportingHolidays || !holidaysCsv.trim() || isReadOnly
+                    }
                     className="w-full"
                   >
                     {isImportingHolidays
@@ -674,7 +714,9 @@ export default function Admin() {
                       id="manager-file"
                       type="file"
                       accept=".csv,text/csv"
-                      onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
+                      onChange={(e) =>
+                        setManagerFile(e.target.files?.[0] || null)
+                      }
                       disabled={isReadOnly}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -752,7 +794,7 @@ export default function Admin() {
             )}
           </CardContent>
         </Card>
-        
+
         <div className="mb-4 flex border-b">
           <button
             type="button"
@@ -839,7 +881,44 @@ export default function Admin() {
           <Card className="mb-6">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Все активности за месяц</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() =>
+                      setCurrentDate(
+                        new Date(
+                          currentDate.getFullYear(),
+                          currentDate.getMonth() - 1,
+                          1,
+                        ),
+                      )
+                    }
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <CardTitle>
+                    {currentDate.toLocaleString("ru-RU", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() =>
+                      setCurrentDate(
+                        new Date(
+                          currentDate.getFullYear(),
+                          currentDate.getMonth() + 1,
+                          1,
+                        ),
+                      )
+                    }
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
 
                 <div className="flex items-center space-x-2">
                   <span className="text-sm">Менеджер:</span>
@@ -873,13 +952,12 @@ export default function Admin() {
 
                       <div className="space-y-2 pl-4 border-l border-muted">
                         {days.map((day) => {
-                          const dayActivities =
-                            selectedManagerId
-                              ? day.activities.filter(
-                                  (activity) =>
-                                    activity.managerName === selectedManagerId,
-                                )
-                              : day.activities;
+                          const dayActivities = selectedManagerId
+                            ? day.activities.filter(
+                                (activity) =>
+                                  activity.managerName === selectedManagerId,
+                              )
+                            : day.activities;
 
                           return (
                             <div
@@ -901,42 +979,76 @@ export default function Admin() {
                                 </p>
                               ) : (
                                 dayActivities.map((activity) => (
-                                    <div
-                                      key={activity.id}
-                                      className="p-3 border rounded-lg"
-                                    >
-                                      <div className="flex flex-col">
-                                        <p className="font-medium">
-                                          {activity.type?.name} •{" "}
-                                          {activity.employee?.lastName}{" "}
-                                          {activity.employee?.firstName}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                          {activity.city?.name} •{" "}
-                                          {new Date(
-                                            activity.startDate,
-                                          ).toLocaleString("ru-RU", {
-                                            day: "2-digit",
-                                            month: "2-digit",
-                                            year: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}{" "}
-                                          —{" "}
-                                          {new Date(
-                                            activity.endDate,
-                                          ).toLocaleString("ru-RU", {
-                                            day: "2-digit",
-                                            month: "2-digit",
-                                            year: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}{" "}
-                                          • менеджер: {activity.managerName}
-                                        </p>
-                                      </div>
+                                  <div
+                                    key={activity.id}
+                                    className="p-3 border rounded-lg flex items-start justify-between gap-2"
+                                  >
+                                    <div className="flex flex-col min-w-0">
+                                      <p className="font-medium">
+                                        {activity.type?.name} •{" "}
+                                        {activity.employee?.lastName}{" "}
+                                        {activity.employee?.firstName}
+                                      </p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {activity.city?.name} •{" "}
+                                        {new Date(
+                                          activity.startDate,
+                                        ).toLocaleString("ru-RU", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}{" "}
+                                        —{" "}
+                                        {new Date(
+                                          activity.endDate,
+                                        ).toLocaleString("ru-RU", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          year: "numeric",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}{" "}
+                                        • менеджер: {activity.managerName}
+                                      </p>
                                     </div>
-                                  ))
+                                    {confirmingId === activity.id ? (
+                                      <div className="flex items-center gap-1">
+                                        <Button
+                                          variant="destructive"
+                                          size="sm"
+                                          disabled={deleteActivityMutation.isPending}
+                                          onClick={() => {
+                                            deleteActivityMutation.mutate(activity.id, {
+                                              onSuccess: () => setConfirmingId(null),
+                                            });
+                                          }}
+                                        >
+                                          {deleteActivityMutation.isPending ? "…" : "Да, удалить"}
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={deleteActivityMutation.isPending}
+                                          onClick={() => setConfirmingId(null)}
+                                        >
+                                          Отмена
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        onClick={() => setConfirmingId(activity.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4 mr-1" />
+                                        Удалить
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))
                               )}
                             </div>
                           );
@@ -952,6 +1064,7 @@ export default function Admin() {
 
         <BottomNavigation />
       </div>
+
     </div>
   );
 }

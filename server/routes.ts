@@ -473,6 +473,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/activities/:id", async (req, res) => {
+    try {
+      await storage.deleteActivity(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("DELETE /api/activities/:id error", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get("/api/activities/calendar/user/:userId", async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
