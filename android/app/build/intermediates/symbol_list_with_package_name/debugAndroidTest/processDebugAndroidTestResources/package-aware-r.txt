@@ -1,0 +1,3 @@
+com.company.managerplanner.test
+style WhiteBackgroundDialogTheme
+style WhiteBackgroundTheme

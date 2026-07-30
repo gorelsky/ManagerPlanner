@@ -1,0 +1,5 @@
+{
+	"appId": "com.company.managerplanner",
+	"appName": "ManagerPlanner",
+	"webDir": "dist/public"
+}
