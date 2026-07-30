@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -59,8 +59,8 @@ import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi, holidaysApi, userApi } from "@/lib/api";
-import type { ActivityWithDetails, User } from "@shared/schema";
+import { activityApi } from "@/lib/api";
+import type { ActivityWithDetails } from "@/shared/schema";
 import {
   PieChart,
   Pie,
@@ -74,11 +74,10 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-
-// ─── Types & constants ───────────────────────────────────────────────────────
+import { supabase } from "@/supabase";
 
 type CalendarStats = {
-  date: string; // "YYYY-MM-DD"
+  date: string;
   planned: number;
   inProgress: number;
   completed: number;
@@ -90,18 +89,16 @@ type ViewMode = "list" | "calendar" | "analytics";
 type GroupBy = "date" | "manager" | "type" | "city";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  planned:     { label: "Запланировано", color: "#3b82f6", bg: "bg-blue-500" },
-  in_progress: { label: "В процессе",    color: "#f59e0b", bg: "bg-amber-500" },
-  completed:   { label: "Выполнено",     color: "#10b981", bg: "bg-emerald-500" },
-  cancelled:   { label: "Отменено",      color: "#ef4444", bg: "bg-red-500" },
-  rescheduled: { label: "Перенесено",    color: "#8b5cf6", bg: "bg-violet-500" },
+  planned: { label: "Запланировано", color: "#3b82f6", bg: "bg-blue-500" },
+  in_progress: { label: "В процессе", color: "#f59e0b", bg: "bg-amber-500" },
+  completed: { label: "Выполнено", color: "#10b981", bg: "bg-emerald-500" },
+  cancelled: { label: "Отменено", color: "#ef4444", bg: "bg-red-500" },
+  rescheduled: { label: "Перенесено", color: "#8b5cf6", bg: "bg-violet-500" },
 };
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatManagerName(u: User) {
+function formatManagerName(u: any) {
   const full = `${u.lastName || ""} ${u.firstName || ""} ${u.middleName || ""}`.trim();
-  return full || u.username;
+  return full || u.username || "";
 }
 
 function escapeCsv(value: string | number | undefined) {
@@ -131,9 +128,7 @@ function exportActivitiesToCsv(activities: ActivityWithDetails[], filename: stri
     a.type?.name || "—",
     a.city?.name || "—",
     STATUS_CONFIG[a.status]?.label || a.status,
-    a.employee
-      ? `${a.employee.lastName || ""} ${a.employee.firstName || ""}`.trim()
-      : "—",
+    a.employee ? `${a.employee.lastName || ""} ${a.employee.firstName || ""}`.trim() : "—",
     a.title,
     a.description || "",
   ]);
@@ -149,15 +144,12 @@ function exportActivitiesToCsv(activities: ActivityWithDetails[], filename: stri
   URL.revokeObjectURL(url);
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────────
-
 export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ActivityWithDetails | null>(null);
 
-  // Admin/director-only state
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [groupBy, setGroupBy] = useState<GroupBy>("date");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -173,18 +165,24 @@ export default function Dashboard() {
 
   const isPrivileged = user?.role === "admin" || user?.role === "director";
 
-  // Dates
   const startDate = startOfMonth(currentDate);
   const endDate = endOfMonth(currentDate);
 
-  // Managers list (for filters)
   const { data: managers = [] } = useQuery({
-    queryKey: ["/api/users/managers"],
-    queryFn: () => userApi.getManagersList(),
+    queryKey: ["supabase/users/managers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, username, first_name, last_name, middle_name, role")
+        .eq("role", "manager")
+        .order("last_name", { ascending: true });
+
+      if (error) throw new Error(error.message);
+      return (data ?? []) as any[];
+    },
     enabled: isPrivileged,
   });
 
-  // Activities: один источник данных для всех ролей
   const {
     data: activities = [],
     isLoading: activitiesLoading,
@@ -195,8 +193,6 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Calendar stats: остаётся только для менеджера,
-  // админ/директор сейчас тоже могут использовать общий календарь из activities
   const {
     data: calendarStatsData = { items: [] as CalendarStats[] },
     isLoading: isCalendarLoading,
@@ -207,30 +203,27 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  // Holidays
-  const calendarYear = currentDate.getFullYear();
-  const { data: calendarHolidays = [] } = useQuery({
-    queryKey: ["/api/holidays", calendarYear],
-    queryFn: () =>
-      holidaysApi.getHolidaysForYear(calendarYear) as Promise<{ date: string; name: string }[]>,
-  });
+const calendarYear = currentDate.getFullYear();
+const { data: calendarHolidays = [] } = useQuery({
+  queryKey: ["supabase/holidays", calendarYear],
+  queryFn: async () => [],
+  enabled: !!user?.id,
+});
 
   const holidayDates = useMemo(
     () =>
       new Set(
-        (Array.isArray(calendarHolidays) ? calendarHolidays : []).map(
-          (h: any) => new Date(h.date).toISOString().slice(0, 10),
+        (Array.isArray(calendarHolidays) ? calendarHolidays : []).map((h: any) =>
+          new Date(h.date).toISOString().slice(0, 10),
         ),
       ),
     [calendarHolidays],
   );
 
-  // ── Data for view ───────────────────────────────────────────
   const baseActivities = activities;
   const isLoading = activitiesLoading;
   const hasError = activitiesError || calendarError;
-
-  const filteredActivities = useMemo(() => {
+    const filteredActivities = useMemo(() => {
     let list = [...baseActivities];
 
     if (isPrivileged) {
@@ -269,7 +262,6 @@ export default function Dashboard() {
     return list;
   }, [baseActivities, isPrivileged, managerFilter, statusFilter, typeFilter, cityFilter, searchTerm]);
 
-  // Grouping for privileged list view
   const groupedActivities = useMemo(() => {
     if (!isPrivileged || groupBy === "date") {
       return filteredActivities.reduce((groups, a) => {
@@ -298,7 +290,6 @@ export default function Dashboard() {
       }, {} as Record<string, ActivityWithDetails[]>);
     }
 
-    // city
     return filteredActivities.reduce((groups, a) => {
       const key = a.city?.name || "Не указан";
       if (!groups[key]) groups[key] = [];
@@ -307,13 +298,19 @@ export default function Dashboard() {
     }, {} as Record<string, ActivityWithDetails[]>);
   }, [filteredActivities, isPrivileged, groupBy]);
 
-  // Calendar map for privileged view (computed from all activities)
   const privilegedCalendarMap = useMemo(() => {
     const map: Record<string, CalendarStats> = {};
     for (const a of filteredActivities) {
       const dayKey = format(new Date(a.startDate), "yyyy-MM-dd");
       if (!map[dayKey]) {
-        map[dayKey] = { date: dayKey, planned: 0, inProgress: 0, completed: 0, cancelled: 0, rescheduled: 0 };
+        map[dayKey] = {
+          date: dayKey,
+          planned: 0,
+          inProgress: 0,
+          completed: 0,
+          cancelled: 0,
+          rescheduled: 0,
+        };
       }
       const { status } = a;
       if (status === "planned") map[dayKey].planned += 1;
@@ -335,7 +332,6 @@ export default function Dashboard() {
     return map;
   }, [calendarStatsData, privilegedCalendarMap, isPrivileged]);
 
-  // ── Stats ───────────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = filteredActivities.length;
     const completed = filteredActivities.filter((a) => a.status === "completed").length;
@@ -370,13 +366,13 @@ export default function Dashboard() {
       .slice(0, 10);
   }, [filteredActivities, isPrivileged]);
 
-  // ── Mutations ───────────────────────────────────────────────
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => activityApi.updateActivityStatus(id, status),
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      activityApi.updateActivityStatus(id, status),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/calendar/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/all"] });
       toast({ title: "Успешно", description: "Статус активности обновлён" });
       setSelectedIds(new Set());
     },
@@ -390,9 +386,9 @@ export default function Dashboard() {
       await Promise.all(ids.map((id) => activityApi.deleteActivity(id)));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/calendar/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/all"] });
       toast({ title: "Успешно", description: "Активности удалены" });
       setSelectedIds(new Set());
     },
@@ -414,9 +410,9 @@ export default function Dashboard() {
   const handleBulkComplete = () => {
     const ids = Array.from(selectedIds);
     Promise.all(ids.map((id) => activityApi.updateActivityStatus(id, "completed"))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/calendar/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/all"] });
       toast({ title: "Успешно", description: `Завершено активностей: ${ids.length}` });
       setSelectedIds(new Set());
     });
@@ -425,9 +421,9 @@ export default function Dashboard() {
   const handleBulkCancel = () => {
     const ids = Array.from(selectedIds);
     Promise.all(ids.map((id) => activityApi.updateActivityStatus(id, "cancelled"))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/calendar/user", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/activities/all"] });
       toast({ title: "Успешно", description: `Отменено активностей: ${ids.length}` });
       setSelectedIds(new Set());
     });
@@ -469,7 +465,6 @@ export default function Dashboard() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [baseActivities]);
 
-  // ── Calendar grid ───────────────────────────────────────────
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const calendarStart = startOfWeek(monthStart, { locale: ru, weekStartsOn: 1 });
@@ -483,8 +478,7 @@ export default function Dashboard() {
     }
     weeks.push(week);
   }
-
-  if (!user) {
+    if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -496,7 +490,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen pb-20">
-      {/* Header */}
       <header className="bg-blue-header text-white px-4 py-4">
         <div className="flex items-center justify-between mb-4">
           <SideMenu />
@@ -504,7 +497,7 @@ export default function Dashboard() {
           <div></div>
         </div>
 
-        <UserProfile user={user} />
+        {user && <UserProfile user={user} />}
 
         <div className="flex justify-between items-center mt-2">
           <h3 className="text-white font-medium">План-факт активностей</h3>
@@ -520,12 +513,15 @@ export default function Dashboard() {
           </Button>
         </div>
 
-        {/* View switcher */}
         <div className="mt-3 flex gap-2 flex-wrap">
           <Button
             size="sm"
             variant={viewMode === "list" ? "default" : "outline"}
-            className={viewMode === "list" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+            className={
+              viewMode === "list"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "border-emerald-600 text-emerald-700"
+            }
             onClick={() => setViewMode("list")}
           >
             <List className="w-4 h-4 mr-1" /> Список
@@ -533,7 +529,11 @@ export default function Dashboard() {
           <Button
             size="sm"
             variant={viewMode === "calendar" ? "default" : "outline"}
-            className={viewMode === "calendar" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+            className={
+              viewMode === "calendar"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "border-emerald-600 text-emerald-700"
+            }
             onClick={() => setViewMode("calendar")}
           >
             <CalendarIcon className="w-4 h-4 mr-1" /> Календарь
@@ -542,7 +542,11 @@ export default function Dashboard() {
             <Button
               size="sm"
               variant={viewMode === "analytics" ? "default" : "outline"}
-              className={viewMode === "analytics" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+              className={
+                viewMode === "analytics"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "border-emerald-600 text-emerald-700"
+              }
               onClick={() => setViewMode("analytics")}
             >
               <BarChart3 className="w-4 h-4 mr-1" /> Аналитика
@@ -551,7 +555,6 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Search and date navigation */}
       <div className="px-4 py-4 bg-card">
         {viewMode === "list" && (
           <div className="relative mb-4">
@@ -574,7 +577,6 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Admin/Director: analytics strip (visible in list/calendar too) */}
       {isPrivileged && viewMode !== "analytics" && (
         <div className="px-4 mb-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
@@ -618,7 +620,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Admin/Director: filters and bulk actions */}
       {isPrivileged && viewMode === "list" && (
         <div className="px-4 mb-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -667,7 +668,10 @@ export default function Dashboard() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Отмена</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
+                      <AlertDialogAction
+                        onClick={handleBulkDelete}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
                         Удалить
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -688,7 +692,7 @@ export default function Dashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все менеджеры</SelectItem>
-                  {managers.map((m) => (
+                  {managers.map((m: any) => (
                     <SelectItem key={m.id} value={m.id}>
                       {formatManagerName(m)}
                     </SelectItem>
@@ -739,31 +743,29 @@ export default function Dashboard() {
               </Select>
             </div>
           )}
-
-          {/* Grouping */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Группировать:</span>
-            <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)} className="w-auto">
-              <TabsList className="h-8">
-                <TabsTrigger value="date" className="text-xs px-2">
-                  По датам
-                </TabsTrigger>
-                <TabsTrigger value="manager" className="text-xs px-2">
-                  По менеджерам
-                </TabsTrigger>
-                <TabsTrigger value="type" className="text-xs px-2">
-                  По типам
-                </TabsTrigger>
-                <TabsTrigger value="city" className="text-xs px-2">
-                  По городам
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
         </div>
       )}
 
-      {/* Main content */}
+      <div className="flex items-center gap-2 px-4">
+        <span className="text-sm text-muted-foreground">Группировать:</span>
+        <Tabs value={groupBy} onValueChange={(v) => setGroupBy(v as GroupBy)} className="w-auto">
+          <TabsList className="h-8">
+            <TabsTrigger value="date" className="text-xs px-2">
+              По датам
+            </TabsTrigger>
+            <TabsTrigger value="manager" className="text-xs px-2">
+              По менеджерам
+            </TabsTrigger>
+            <TabsTrigger value="type" className="text-xs px-2">
+              По типам
+            </TabsTrigger>
+            <TabsTrigger value="city" className="text-xs px-2">
+              По городам
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+            {/* Main content */}
       {viewMode === "list" ? (
         <div className="px-4">
           {hasError ? (
@@ -885,7 +887,6 @@ export default function Dashboard() {
                     {week.map((day) => {
                       const dateKey = format(day, "yyyy-MM-dd");
                       const stats = calendarStatsMap[dateKey];
-
                       const isToday = isSameDay(day, new Date());
                       const inCurrentMonth = isSameMonth(day, monthStart);
                       const dayOfWeek = day.getDay();
@@ -901,10 +902,10 @@ export default function Dashboard() {
                             isHoliday
                               ? "bg-orange-100"
                               : isWeekend
-                              ? "bg-red-100"
-                              : inCurrentMonth
-                              ? "bg-card"
-                              : "bg-muted/40",
+                                ? "bg-red-100"
+                                : inCurrentMonth
+                                  ? "bg-card"
+                                  : "bg-muted/40",
                           ].join(" ")}
                         >
                           <div
@@ -1010,147 +1011,143 @@ export default function Dashboard() {
                   ).length}
                   <br />
                   Плановых активностей (по дням):{" "}
-                  {calendarStatsData.items.reduce(
-                    (sum, d) => sum + d.planned,
-                    0,
-                  )}
+                  {calendarStatsData.items.reduce((sum, d) => sum + d.planned, 0)}
                   <br />
                   Завершённых активностей (по дням):{" "}
-                  {calendarStatsData.items.reduce(
-                    (sum, d) => sum + d.completed,
-                    0,
-                  )}
+                  {calendarStatsData.items.reduce((sum, d) => sum + d.completed, 0)}
                 </div>
               )}
             </>
           )}
         </div>
       ) : (
-        /* Analytics view */
-        <div className="px-4 py-4 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-            <Card className="bg-blue-50 border-blue-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-blue-700">{stats.total}</div>
-                <div className="text-[10px] text-blue-500 uppercase">Всего</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-emerald-50 border-emerald-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-emerald-700">{stats.completed}</div>
-                <div className="text-[10px] text-emerald-500 uppercase">Выполнено</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-amber-50 border-amber-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-amber-700">{stats.inProgress}</div>
-                <div className="text-[10px] text-amber-500 uppercase">В процессе</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-violet-50 border-violet-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-violet-700">{stats.planned}</div>
-                <div className="text-[10px] text-violet-500 uppercase">Запланировано</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-red-50 border-red-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-red-700">{stats.cancelled}</div>
-                <div className="text-[10px] text-red-500 uppercase">Отменено</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-slate-50 border-slate-100">
-              <CardContent className="p-3 text-center">
-                <div className="text-2xl font-bold text-slate-700">{stats.completionRate}%</div>
-                <div className="text-[10px] text-slate-500 uppercase">Выполнение</div>
-              </CardContent>
-            </Card>
-          </div>
+        <>
+          {/* Analytics view */}
+          <div className="px-4 py-4 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+              <Card className="bg-blue-50 border-blue-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-blue-700">{stats.total}</div>
+                  <div className="text-[10px] text-blue-500 uppercase">Всего</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-emerald-50 border-emerald-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-emerald-700">{stats.completed}</div>
+                  <div className="text-[10px] text-emerald-500 uppercase">Выполнено</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-amber-50 border-amber-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-amber-700">{stats.inProgress}</div>
+                  <div className="text-[10px] text-amber-500 uppercase">В процессе</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-violet-50 border-violet-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-violet-700">{stats.planned}</div>
+                  <div className="text-[10px] text-violet-500 uppercase">Запланировано</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-red-50 border-red-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-red-700">{stats.cancelled}</div>
+                  <div className="text-[10px] text-red-500 uppercase">Отменено</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-50 border-slate-100">
+                <CardContent className="p-3 text-center">
+                  <div className="text-2xl font-bold text-slate-700">{stats.completionRate}%</div>
+                  <div className="text-[10px] text-slate-500 uppercase">Выполнение</div>
+                </CardContent>
+              </Card>
+            </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Распределение по статусам</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label
-                    >
-                      {statusChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-4 space-y-2">
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-                  const count = filteredActivities.filter((a) => a.status === key).length;
-                  const pct = stats.total ? Math.round((count / stats.total) * 100) : 0;
-                  return (
-                    <div key={key}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium">{cfg.label}</span>
-                        <span className="text-muted-foreground">
-                          {count} ({pct}%)
-                        </span>
-                      </div>
-                      <Progress value={pct} className="h-2" />
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {managerChartData.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Активности по менеджерам</CardTitle>
+                <CardTitle className="text-base">Распределение по статусам</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={managerChartData}
-                      layout="vertical"
-                      margin={{ left: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" />
-                      <YAxis
-                        dataKey="name"
-                        type="category"
-                        width={120}
-                        tick={{ fontSize: 11 }}
-                      />
-                      <Tooltip />
-                      <Bar
+                    <PieChart>
+                      <Pie
+                        data={statusChartData}
                         dataKey="value"
-                        fill="#3b82f6"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </BarChart>
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label
+                      >
+                        {statusChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
                   </ResponsiveContainer>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+                    const count = filteredActivities.filter((a) => a.status === key).length;
+                    const pct = stats.total ? Math.round((count / stats.total) * 100) : 0;
+
+                    return (
+                      <div key={key}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="font-medium">{cfg.label}</span>
+                          <span className="text-muted-foreground">
+                            {count} ({pct}%)
+                          </span>
+                        </div>
+                        <Progress value={pct} className="h-2" />
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
-      )}
 
-      {/* Floating Action Button */}
-      <button
+            {managerChartData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Активности по менеджерам</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={managerChartData}
+                        layout="vertical"
+                        margin={{ left: 20 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis
+                          dataKey="name"
+                          type="category"
+                          width={120}
+                          tick={{ fontSize: 11 }}
+                        />
+                        <Tooltip />
+                        <Bar
+                          dataKey="value"
+                          fill="#3b82f6"
+                          radius={[0, 4, 4, 0]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </>
+      )}
+            <button
         className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center"
         onClick={() => {
           setEditingActivity(null);

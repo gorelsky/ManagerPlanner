@@ -8,10 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.jpg";
 import { supabase } from "@/supabase";
-import type { User } from "@shared/schema";
 
 export default function Login() {
-  const [username, setUsername] = useState(""); // сюда вводим email
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,12 +23,10 @@ export default function Login() {
 
     try {
       const email = username.trim();
-      const pwd = password;
 
-      // 1. Логин через Supabase Auth (email + пароль)
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password: pwd,
+        password,
       });
 
       if (error) {
@@ -50,62 +47,16 @@ export default function Login() {
         return;
       }
 
-      // 2. Загрузка профиля пользователя из таблицы public.users
-      const { data: profiles, error: profileError } = await supabase
-        .from("users")   // твоя таблица в схеме public
-        .select("*")
-        .eq("email", email)
-        .limit(1);       // безопаснее, чем .single()
-
-      if (profileError) {
-        toast({
-          title: "Ошибка профиля",
-          description:
-            profileError.message ||
-            "Не удалось загрузить профиль пользователя. Обратитесь к администратору.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!profiles || profiles.length === 0) {
-        toast({
-          title: "Профиль не найден",
-          description:
-            "Для этого email нет профиля в таблице users. Обратитесь к администратору.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const profile = profiles[0];
-
-      // 3. Формируем объект User под @shared/schema
-      const user: User = {
-        id: profile.id,                 // number
-        username: profile.username,     // логин (например, 'admin', 'pervakov')
-        role: profile.role,             // роль ('admin', 'tm' и т.п.)
-
-        firstName: profile.first_name ?? "",
-        middleName: profile.middle_name ?? "",
-        lastName: profile.last_name ?? "",
-        email: profile.email ?? email,
-
-        // если в типе User есть дополнительные поля, можно добавить их:
-        // profileImage: profile.profile_image ?? null,
-        // cityId: profile.city_id ?? null,
-        // createdAt: profile.created_at ?? null,
-      };
-
-      // 4. Сохраняем пользователя в контекст и localStorage
-      login(user);
+      login(
+        {
+          ...data.user,
+        },
+        data.session,
+      );
 
       toast({
         title: "Вход выполнен успешно",
-        description:
-          user.firstName || user.lastName
-            ? `Добро пожаловать, ${user.firstName} ${user.middleName} ${user.lastName}!`
-            : `Добро пожаловать, ${user.username}!`,
+        description: `Добро пожаловать, ${data.user.email}!`,
       });
     } catch {
       toast({
@@ -121,7 +72,6 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-200 dark:bg-gray-900 p-4">
       <div className="w-full max-w-4xl mx-auto">
-        {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="mx-auto w-24 h-24 mb-4 flex items-center justify-center">
             <img
@@ -138,12 +88,9 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Login Form */}
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
-              Вход в систему
-            </CardTitle>
+            <CardTitle className="text-2xl text-center">Вход в систему</CardTitle>
             <p className="text-sm text-muted-foreground text-center">
               Введите ваши учетные данные для входа
             </p>

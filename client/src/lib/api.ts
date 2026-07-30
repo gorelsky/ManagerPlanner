@@ -1,4 +1,3 @@
-// client/src/lib/api.ts
 import { supabase } from "../supabase";
 import type {
   User,
@@ -15,20 +14,12 @@ import type {
   EmployeeWithDetails,
 } from "@shared/schema";
 
-// Общие хелперы для обработки Supabase-ответов
-
 function handleSupabaseError(error: any, context: string) {
   if (error) {
     console.error(`Supabase ${context} error`, error);
     throw new Error(error.message || `Supabase error in ${context}`);
   }
 }
-
-type SupabaseListResult<T> = T[];
-
-// ─────────────────────────────────────────────────────────────
-// Users (профиль менеджера / пользователя)
-// ─────────────────────────────────────────────────────────────
 
 export const userApi = {
   async getCurrentUser(): Promise<User | null> {
@@ -38,17 +29,16 @@ export const userApi = {
     } = await supabase.auth.getUser();
     handleSupabaseError(error, "getCurrentUser");
 
-    if (!user) return null;
+    if (!user?.email) return null;
 
     const { data, error: profileError } = await supabase
       .from("users")
       .select("*")
-      .eq("id", user.id)
-      .single();
+      .eq("email", user.email)
+      .maybeSingle();
 
     handleSupabaseError(profileError, "getUserProfile");
-
-    return data as User;
+    return (data ?? null) as User | null;
   },
 
   async updateUser(id: string, data: Partial<InsertUser>): Promise<User> {
@@ -64,10 +54,6 @@ export const userApi = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────
-// Cities (города: id, name, region)
-// ─────────────────────────────────────────────────────────────
-
 export const cityApi = {
   async getCities(): Promise<City[]> {
     const { data, error } = await supabase
@@ -79,8 +65,6 @@ export const cityApi = {
     return (data ?? []) as City[];
   },
 
-  // Вариант для "города зоны менеджера". Пока берём все города,
-  // при наличии связей можно сузить выборку.
   async getCitiesByManager(managerId: string): Promise<City[]> {
     const { data, error } = await supabase
       .from("cities")
@@ -120,10 +104,6 @@ export const cityApi = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────
-// Employees (МП: id, first_name, last_name, middle_name, manager_id, city_id, ...)
-// ─────────────────────────────────────────────────────────────
-
 export const employeeApi = {
   async getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]> {
     const { data, error } = await supabase
@@ -140,7 +120,7 @@ export const employeeApi = {
         position,
         phone,
         email,
-        cities!inner(id, name, region)
+        cities(id, name, region)
       `,
       )
       .eq("manager_id", managerId)
@@ -246,15 +226,15 @@ export const employeeApi = {
 
   async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee> {
     const payload: any = {
-      ...(data.firstName && { first_name: data.firstName }),
-      ...(data.lastName && { last_name: data.lastName }),
-      ...(data.middleName && { middle_name: data.middleName }),
-      ...(data.managerId && { manager_id: data.managerId }),
-      ...(data.cityId && { city_id: data.cityId }),
-      ...(data.profileImage && { profile_image: data.profileImage }),
-      ...(data.position && { position: data.position }),
-      ...(data.phone && { phone: data.phone }),
-      ...(data.email && { email: data.email }),
+      ...(data.firstName !== undefined && { first_name: data.firstName }),
+      ...(data.lastName !== undefined && { last_name: data.lastName }),
+      ...(data.middleName !== undefined && { middle_name: data.middleName }),
+      ...(data.managerId !== undefined && { manager_id: data.managerId }),
+      ...(data.cityId !== undefined && { city_id: data.cityId }),
+      ...(data.profileImage !== undefined && { profile_image: data.profileImage }),
+      ...(data.position !== undefined && { position: data.position }),
+      ...(data.phone !== undefined && { phone: data.phone }),
+      ...(data.email !== undefined && { email: data.email }),
     };
 
     const { data: updated, error } = await supabase
@@ -285,10 +265,6 @@ export const employeeApi = {
     handleSupabaseError(error, "deleteEmployee");
   },
 };
-
-// ─────────────────────────────────────────────────────────────
-// Activity types
-// ─────────────────────────────────────────────────────────────
 
 export const activityTypeApi = {
   async getActivityTypes(): Promise<ActivityType[]> {
@@ -329,10 +305,6 @@ export const activityTypeApi = {
     handleSupabaseError(error, "deleteActivityType");
   },
 };
-
-// ─────────────────────────────────────────────────────────────
-// Activities + календарь
-// ─────────────────────────────────────────────────────────────
 
 export const activityApi = {
   async getActivitiesByUser(
@@ -398,7 +370,7 @@ export const activityApi = {
             middleName: a.employees.middle_name ?? "",
           }
         : undefined,
-      managerName: "", // при необходимости заполняется на основе user/employee
+      managerName: "",
     })) as ActivityWithDetails[];
   },
 
@@ -505,15 +477,15 @@ export const activityApi = {
 
   async updateActivity(id: string, data: Partial<InsertActivity>): Promise<Activity> {
     const payload: any = {
-      ...(data.userId && { user_id: data.userId }),
-      ...(data.typeId && { type_id: data.typeId }),
-      ...(data.cityId && { city_id: data.cityId }),
+      ...(data.userId !== undefined && { user_id: data.userId }),
+      ...(data.typeId !== undefined && { type_id: data.typeId }),
+      ...(data.cityId !== undefined && { city_id: data.cityId }),
       ...(data.employeeId !== undefined && { employee_id: data.employeeId }),
-      ...(data.title && { title: data.title }),
-      ...(data.description && { description: data.description }),
-      ...(data.startDate && { start_date: data.startDate }),
-      ...(data.endDate && { end_date: data.endDate }),
-      ...(data.status && { status: data.status }),
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.startDate !== undefined && { start_date: data.startDate }),
+      ...(data.endDate !== undefined && { end_date: data.endDate }),
+      ...(data.status !== undefined && { status: data.status }),
     };
 
     const { data: updated, error } = await supabase
@@ -553,7 +525,6 @@ export const activityApi = {
     handleSupabaseError(error, "updateActivityStatus");
   },
 
-  // Календарная статистика для менеджера — через RPC-функцию в Supabase
   async getActivityCalendarStatsByUser(
     userId: string,
     startDate: Date,
@@ -569,32 +540,9 @@ export const activityApi = {
     );
 
     handleSupabaseError(error, "getActivityCalendarStatsByUser");
-
     return { items: data ?? [] };
   },
 };
-
-// ─────────────────────────────────────────────────────────────
-// Holidays (id, date, name)
-// ─────────────────────────────────────────────────────────────
-
-export const holidaysApi = {
-  async getHolidaysForYear(year: number): Promise<{ date: string; name: string }[]> {
-    const { data, error } = await supabase
-      .from("holidays")
-      .select("date, name")
-      .gte("date", `${year}-01-01`)
-      .lte("date", `${year}-12-31`)
-      .order("date", { ascending: true });
-
-    handleSupabaseError(error, "getHolidaysForYear");
-    return data ?? [];
-  },
-};
-
-// ─────────────────────────────────────────────────────────────
-// Chat (если есть таблица messages)
-// ─────────────────────────────────────────────────────────────
 
 export const chatApi = {
   async getMessages(threadId: string): Promise<any[]> {
@@ -620,4 +568,4 @@ export const chatApi = {
     });
     handleSupabaseError(error, "sendMessage");
   },
-};
+};   

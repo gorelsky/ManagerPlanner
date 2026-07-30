@@ -14,7 +14,7 @@ import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi, holidaysApi } from "@/lib/api";
+import { activityApi} from "@/lib/api";
 import {
   startOfWeek,
   endOfWeek,
@@ -60,15 +60,12 @@ export default function Analytics() {
   });
 
 
-  // Праздники для года начала периода
-  const periodYear = start.getFullYear();
-  const { data: holidays = [] } = useQuery({
-    queryKey: ["/api/holidays", periodYear],
-    queryFn: () =>
-      holidaysApi.getHolidaysForYear(periodYear) as Promise<
-        { date: string; name: string }[]
-      >,
-  });
+// Праздники для года начала периода
+const periodYear = start.getFullYear();
+const { data: holidays = [] } = useQuery({
+  queryKey: ["supabase/holidays", periodYear],
+  queryFn: async () => [],
+});
 
 
   // Множество дат-праздников "YYYY-MM-DD"

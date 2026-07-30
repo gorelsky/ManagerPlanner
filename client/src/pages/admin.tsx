@@ -17,8 +17,7 @@ import {
   employeeApi,
   userApi,
   activityApi,
-  cityApi,
-  holidaysApi,
+  cityApi
 } from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
 
@@ -95,20 +94,23 @@ export default function Admin() {
     );
   }
 
-  const { data: allEmployees = [], isLoading: employeesLoading } = useQuery({
-    queryKey: ["/api/employees/all"],
-    queryFn: () => employeeApi.getAllEmployees(),
-  });
+const { data: allEmployees = [], isLoading: employeesLoading } = useQuery({
+  queryKey: ["/api/employees/all"],
+  queryFn: () => employeeApi.getAllEmployees(),
+  enabled: activeTab === "reps",
+});
 
-  const { data: allManagers = [], isLoading: managersLoading } = useQuery({
-    queryKey: ["/api/users/managers"],
-    queryFn: () => userApi.getManagersList(),
-  });
+const { data: allManagers = [], isLoading: managersLoading } = useQuery({
+  queryKey: ["/api/users/managers"],
+  queryFn: () => userApi.getManagersList(),
+  enabled: activeTab === "reps" || uploadTab === "managers",
+});
 
-  const { data: allActivities = [], isLoading: activitiesLoading } = useQuery({
-    queryKey: ["/api/activities/all"],
-    queryFn: () => activityApi.getAllActivities(),
-  });
+const { data: allActivities = [], isLoading: activitiesLoading } = useQuery({
+  queryKey: ["/api/activities/all"],
+  queryFn: () => activityApi.getAllActivities(),
+  enabled: activeTab === "plans",
+});
 
   const monthStart = new Date(
     currentDate.getFullYear(),
@@ -372,34 +374,28 @@ export default function Admin() {
     importManagerCitiesMutation.mutate(managerCitiesCsv);
   };
 
-  const handleImportHolidays = async () => {
-    if (isReadOnly) return;
-    if (!holidaysCsv.trim()) {
-      toast({
-        title: "Ошибка",
-        description: "Введите CSV с праздниками",
-        variant: "destructive",
-      });
-      return;
-    }
-    try {
-      setIsImportingHolidays(true);
-      const result = await holidaysApi.importHolidays(holidaysCsv);
-      toast({
-        title: "Импорт праздников завершен",
-        description: `Импортировано праздников: ${result.imported ?? 0}`,
-      });
-      setHolidaysCsv("");
-    } catch (error: any) {
-      toast({
-        title: "Ошибка импорта праздников",
-        description: error.message || "Не удалось импортировать праздники",
-        variant: "destructive",
-      });
-    } finally {
-      setIsImportingHolidays(false);
-    }
-  };
+const handleImportHolidays = async () => {
+  if (isReadOnly) return;
+  if (!holidaysCsv.trim()) {
+    toast({
+      title: "Ошибка",
+      description: "Введите CSV с праздниками",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  try {
+    setIsImportingHolidays(true);
+    toast({
+      title: "Импорт праздников временно отключен",
+      description: "Функция пока не подключена к API",
+    });
+    setHolidaysCsv("");
+  } finally {
+    setIsImportingHolidays(false);
+  }
+};
 
   const downloadTemplate = () => {
     if (isReadOnly) return;
@@ -740,60 +736,72 @@ export default function Admin() {
           </>
         )}
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Менеджеры</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {managersLoading ? (
-              <div className="text-center py-4">Загрузка...</div>
-            ) : allManagers.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                Менеджеры пока не загружены
+<Card className="mb-6">
+  <CardHeader>
+    <CardTitle>Менеджеры</CardTitle>
+  </CardHeader>
+  <CardContent>
+    {managersLoading ? (
+      <div className="text-center py-4">Загрузка...</div>
+    ) : allManagers.length === 0 ? (
+      <div className="text-center py-4 text-muted-foreground">
+        Менеджеры пока не загружены
+      </div>
+    ) : (
+      allManagers.map((manager) => {
+        const firstInitial = manager.firstName?.[0] ?? "";
+        const lastInitial = manager.lastName?.[0] ?? "";
+        const initials = `${firstInitial}${lastInitial}` || "U";
+        const fullName =
+          [manager.lastName, manager.firstName].filter(Boolean).join(" ") ||
+          manager.username ||
+          "Пользователь";
+
+        return (
+          <div
+            key={manager.id}
+            className="flex items-center justify-between mb-3"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 overflow-hidden flex items-center justify-center">
+                {manager.profileImage ? (
+                  <img
+                    src={manager.profileImage}
+                    alt={fullName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-blue-600 font-semibold text-sm">
+                    {initials}
+                  </span>
+                )}
               </div>
-            ) : (
-              allManagers.map((manager) => (
-                <div
-                  key={manager.id}
-                  className="flex items-center justify-between mb-3"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 overflow-hidden flex items-center justify-center">
-                      {manager.profileImage ? (
-                        <img
-                          src={manager.profileImage}
-                          alt={`${manager.firstName} ${manager.lastName}`}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-blue-600 font-semibold text-sm">
-                          {manager.firstName.charAt(0)}
-                          {manager.lastName.charAt(0)}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {manager.lastName} {manager.firstName}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isReadOnly}
-                    onClick={() => {
-                      if (isReadOnly) return;
-                      deleteManagerMutation.mutate(manager.id);
-                    }}
-                  >
-                    Удалить
-                  </Button>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              <div>
+                <p className="font-medium">{fullName}</p>
+                {manager.username && (
+                  <p className="text-xs text-muted-foreground">
+                    @{manager.username}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isReadOnly}
+              onClick={() => {
+                if (isReadOnly) return;
+                deleteManagerMutation.mutate(manager.id);
+              }}
+            >
+              Удалить
+            </Button>
+          </div>
+        );
+      })
+    )}
+  </CardContent>
+</Card>
 
         <div className="mb-4 flex border-b">
           <button

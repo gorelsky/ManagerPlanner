@@ -7,76 +7,50 @@ export default function BottomNavigation() {
   const [location] = useLocation();
   const { user } = useAuth();
 
-  const navItems = [];
+  const isPrivileged = user?.role === "admin" || user?.role === "director";
 
-  if (user?.role === "director") {
-    // Директор: Админ → Отчёты → Чат
-    navItems.push({
-      path: "/admin",
-      icon: Settings,
-      label: "Админ",
-      testId: "nav-admin",
-    });
-
-    navItems.push({
-      path: "/reports",
-      icon: BarChart2, // или другой значок, можно BarChart3
-      label: "Отчёты",
-      testId: "nav-reports",
-    });
-
-    navItems.push({
-      path: "/chat",
-      icon: MessageCircle,
-      label: "Чат",
-      testId: "nav-chat",
-    });
-  } else {
-    // Остальные: Внесение, МП, Аналитика, Чат (+ Админ, + Отчёты для админа)
-    navItems.push({
+  const navItems = [
+    {
       path: "/",
       icon: PenTool,
       label: "Внесение",
       testId: "nav-entry",
-    });
-
-    navItems.push({
+    },
+    {
       path: "/reps",
       icon: Users,
       label: "МП",
       testId: "nav-reps",
-    });
-
-    navItems.push({
+    },
+    {
       path: "/analytics",
       icon: BarChart3,
       label: "Аналитика",
       testId: "nav-analytics",
-    });
-
-    navItems.push({
+    },
+    {
       path: "/chat",
       icon: MessageCircle,
       label: "Чат",
       testId: "nav-chat",
-    });
-
-    if (user?.role === "admin") {
-      navItems.push({
-        path: "/admin",
-        icon: Settings,
-        label: "Админ",
-        testId: "nav-admin",
-      });
-
-      navItems.push({
-        path: "/reports",
-        icon: BarChart2,
-        label: "Отчёты",
-        testId: "nav-reports",
-      });
-    }
-  }
+    },
+    ...(isPrivileged
+      ? [
+          {
+            path: "/admin",
+            icon: Settings,
+            label: "Админ",
+            testId: "nav-admin",
+          },
+          {
+            path: "/reports",
+            icon: BarChart2,
+            label: "Отчёты",
+            testId: "nav-reports",
+          },
+        ]
+      : []),
+  ];
 
   return (
     <nav

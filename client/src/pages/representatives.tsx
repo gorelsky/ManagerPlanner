@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Phone, Mail, MapPin, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import BottomNavigation from "@/components/bottom-navigation";
@@ -14,19 +14,25 @@ import type { EmployeeWithDetails } from "@shared/schema";
 export default function Representatives() {
   const { user } = useAuth();
 
+  const managerId = user?.id;
+
   const { data: representatives = [], isLoading } = useQuery({
-    queryKey: ["/api/employees/manager", user?.id],
-    queryFn: () => employeeApi.getEmployeesByManager(user?.id!),
-    enabled: !!user?.id,
+    queryKey: ["/employees/by-manager", managerId],
+    queryFn: () => employeeApi.getEmployeesByManager(managerId!),
+    enabled: !!managerId,
   });
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const a = firstName?.[0] ?? "";
+    const b = lastName?.[0] ?? "";
+    return `${a}${b}`.toUpperCase() || "U";
   };
+
+  if (!user) return null;
 
   if (isLoading) {
     return (
-      <div className="p-4">
+      <div className="p-4 pb-20">
         <div className="text-center">Загрузка...</div>
         <BottomNavigation />
       </div>
@@ -39,10 +45,9 @@ export default function Representatives() {
         <div className="flex items-center justify-between mb-4">
           <SideMenu />
           <h1 className="text-lg font-semibold">Медицинские представители</h1>
-          <div></div>
+          <div />
         </div>
-        {/* Профиль текущего менеджера */}
-        {user && <UserProfile user={user} />}
+        <UserProfile user={user as any} />
       </header>
 
       <div className="p-4">
@@ -92,8 +97,7 @@ export default function Representatives() {
                         <p className="text-sm text-muted-foreground">
                           {rep.position || "Медицинский представитель"}
                           {rep.city?.region ? ` (${rep.city.region} регион)` : ""}
-                          {rep.city?.name && " • локация г. "}
-                          {rep.city?.name}
+                          {rep.city?.name ? ` • локация г. ${rep.city.name}` : ""}
                         </p>
                       </div>
                       <Badge variant="secondary" className="text-xs">
@@ -105,7 +109,6 @@ export default function Representatives() {
                       {rep.phone && (
                         <div className="flex items-center space-x-2 text-muted-foreground">
                           <Phone className="w-4 h-4" />
-                          {/* Телефон как ссылка tel: */}
                           <a
                             href={`tel:${rep.phone}`}
                             className="hover:underline"
@@ -119,7 +122,6 @@ export default function Representatives() {
                       {rep.email && (
                         <div className="flex items-center space-x-2 text-muted-foreground">
                           <Mail className="w-4 h-4" />
-                          {/* Email как ссылка mailto: */}
                           <a
                             href={`mailto:${rep.email}`}
                             className="hover:underline"
@@ -141,13 +143,12 @@ export default function Representatives() {
                         <div className="flex items-center space-x-2 text-muted-foreground">
                           <User className="w-4 h-4" />
                           <span>
-                            Менеджер: {rep.manager.lastName} {rep.manager.firstName} {rep.manager.middleName}
+                            Менеджер: {rep.manager.lastName} {rep.manager.firstName}{" "}
+                            {rep.manager.middleName}
                           </span>
                         </div>
                       )}
                     </div>
-
-                    {/* Блок действий убран: редактирование и активности не нужны */}
                   </div>
                 </div>
               </Card>

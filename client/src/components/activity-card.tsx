@@ -7,7 +7,7 @@ import type { ActivityWithDetails } from "@shared/schema";
 interface ActivityCardProps {
   activity: ActivityWithDetails;
   onMarkComplete: (id: string) => void;
-  onEdit: (activity: ActivityWithDetails) => void; // ← ТУТ
+  onEdit: (activity: ActivityWithDetails) => void;
   onCancel: (id: string) => void;
 }
 
@@ -31,6 +31,11 @@ export default function ActivityCard({
   const now = new Date();
   const endDateTime = new Date(activity.endDate);
   const canComplete = now.getTime() >= endDateTime.getTime();
+
+  const cityName = activity.city?.name || "—";
+  const employeeFirst = activity.employee?.firstName || "";
+  const employeeLast = activity.employee?.lastName || "";
+  const employeeMiddle = activity.employee?.middleName || "";
 
   return (
     <div
@@ -68,7 +73,7 @@ export default function ActivityCard({
           <div className="flex items-center space-x-4 text-xs text-muted-foreground mb-2">
             <span data-testid="activity-location">
               <MapPin className="w-3 h-3 inline mr-1" />
-              {activity.city.name}
+              {cityName}
             </span>
             <span data-testid="activity-duration">
               <Clock className="w-3 h-3 inline mr-1" />
@@ -83,8 +88,8 @@ export default function ActivityCard({
                 className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-medium"
                 data-testid="activity-employee"
               >
-                {activity.employee.lastName} {activity.employee.firstName.charAt(0)}.
-                {activity.employee.middleName?.charAt(0)}.
+                {employeeLast} {employeeFirst ? `${employeeFirst.charAt(0)}.` : ""}
+                {employeeMiddle ? `${employeeMiddle.charAt(0)}.` : ""}
               </span>
             </div>
           )}

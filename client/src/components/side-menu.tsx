@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, User, Shield } from "lucide-react";
+import { Menu, LogOut, User, Shield, LayoutDashboard, ClipboardList, Users, BarChart3 } from "lucide-react";
+import { Link } from "wouter";
 
 export default function SideMenu() {
   const [open, setOpen] = useState(false);
@@ -22,6 +23,8 @@ export default function SideMenu() {
       ? "Директор"
       : "Менеджер";
 
+  const fullName = [user.firstName, user.middleName, user.lastName].filter(Boolean).join(" ");
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -29,7 +32,8 @@ export default function SideMenu() {
           <Menu className="w-6 h-6" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500">
+
+      <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500 flex flex-col">
         <SheetHeader>
           <SheetTitle className="text-white text-left">
             <div className="flex items-center space-x-2">
@@ -38,29 +42,23 @@ export default function SideMenu() {
                   src={user.profileImage}
                   alt="Фото пользователя"
                   className="w-10 h-10 rounded-full object-cover bg-white/20"
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
                 />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                   <User className="w-5 h-5" />
                 </div>
               )}
+
               <div>
                 <p className="text-sm font-medium">
-                  {user.firstName} {user.middleName} {user.lastName}
+                  {fullName || user.username || "Пользователь"}
                 </p>
                 <p className="text-xs text-white/70">{roleLabel}</p>
                 {user.username && (
-                  <p className="text-xs text-green-50">
-                    Отправить письмо с адреса{" "}
-                    <a
-                      href={`mailto:${user.username}`}
-                      className="underline"
-                      data-testid="user-email-link"
-                    >
-                      {user.username}
-                    </a>
-                  </p>
+                  <p className="text-xs text-green-50">@{user.username}</p>
                 )}
               </div>
             </div>
@@ -68,10 +66,37 @@ export default function SideMenu() {
         </SheetHeader>
 
         <div className="mt-8 flex flex-col space-y-2">
-          <div className="px-4 py-3 rounded-lg bg-white/10">
-            <p className="text-xs text-white/60">Логин</p>
-            <p className="text-sm font-medium">@{user.username}</p>
-          </div>
+          <Link href="/">
+            <button className="w-full px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Главная</span>
+            </button>
+          </Link>
+
+          <Link href="/activities">
+            <button className="w-full px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
+              <ClipboardList className="w-4 h-4" />
+              <span>Активности</span>
+            </button>
+          </Link>
+
+          {(user.role === "admin" || user.role === "director") && (
+            <Link href="/admin">
+              <button className="w-full px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
+                <Users className="w-4 h-4" />
+                <span>Сотрудники</span>
+              </button>
+            </Link>
+          )}
+
+          {user.role === "admin" && (
+            <Link href="/analytics">
+              <button className="w-full px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
+                <BarChart3 className="w-4 h-4" />
+                <span>Аналитика</span>
+              </button>
+            </Link>
+          )}
 
           {user.role === "admin" && (
             <div className="px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">

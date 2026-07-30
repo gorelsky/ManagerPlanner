@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,18 +10,19 @@ import Representatives from "@/pages/representatives";
 import Analytics from "@/pages/analytics";
 import Chat from "@/pages/chat";
 import Admin from "@/pages/admin";
-import Reports from "@/pages/reports"; // НОВОЕ
+import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-muted-foreground">Загрузка...</p>
         </div>
       </div>
@@ -32,15 +33,16 @@ function Router() {
     return <Login />;
   }
 
+  const isPrivileged = user.role === "admin" || user.role === "director";
+
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/reps" component={Representatives} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/chat" component={Chat} />
-      <Route path="/admin" component={Admin} />
-      {/* НОВОЕ: отчёты */}
-      <Route path="/reports" component={Reports} />
+      {isPrivileged && <Route path="/admin" component={Admin} />}
+      {isPrivileged && <Route path="/reports" component={Reports} />}
       <Route component={NotFound} />
     </Switch>
   );

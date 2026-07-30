@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,38 +12,88 @@ import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import type { MessageWithDetails, InsertMessage } from "@shared/schema";
+import { supabase } from "@/supabase";
+import type { InsertMessage } from "@shared/schema";
 
-const messageApi = {
-  getMessages: (userId: string) =>
-    fetch(`/api/messages/${userId}`).then((res) => {
-      if (!res.ok) {
-        throw new Error("Не удалось загрузить сообщения");
-      }
-      return res.json();
-    }),
-
-  createMessage: (message: InsertMessage) =>
-    fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(message),
-    }).then((res) => {
-      if (!res.ok) {
-        throw new Error("Не удалось отправить сообщение");
-      }
-      return res.json();
-    }),
-
-  markAsRead: (messageId: string) =>
-    fetch(`/api/messages/${messageId}/read`, {
-      method: "PATCH",
-    }).then((res) => {
-      if (!res.ok) {
-        throw new Error("Не удалось отметить сообщение прочитанным");
-      }
-    }),
+type MessageWithDetails = {
+  id: string;
+  senderId: string;
+  receiverId: string | null;
+  content: string;
+  createdAt: string;
+  readAt: string | null;
+  sender?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    middleName?: string | null;
+    role?: string | null;
+    profileImage?: string | null;
+    username?: string | null;
+  };
 };
+
+async function getMessages(userId: string): Promise<MessageWithDetails[]> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select(
+      `
+      id,
+      sender_id,
+      receiver_id,
+      content,
+      created_at,
+      read_at,
+      sender:users!messages_sender_id_fkey (
+        id,
+        first_name,
+        last_name,
+        middle_name,
+        role,
+        profile_image,
+        username
+      )
+    `,
+    )
+    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error("Не удалось загрузить сообщения");
+  }
+
+  return (data ?? []).map((m: any) => ({
+    id: m.id,
+    senderId: m.sender_id,
+    receiverId: m.receiver_id,
+    content: m.content,
+    createdAt: m.created_at,
+    readAt: m.read_at ?? null,
+    sender: m.sender
+      ? {
+          id: m.sender.id,
+          firstName: m.sender.first_name,
+          lastName: m.sender.last_name,
+          middleName: m.sender.middle_name,
+          role: m.sender.role,
+          profileImage: m.sender.profile_image,
+          username: m.sender.username,
+        }
+      : undefined,
+  }));
+}
+
+async function createMessage(message: InsertMessage) {
+  const { error } = await supabase.from("messages").insert({
+    sender_id: message.senderId,
+    receiver_id: message.receiverId,
+    content: message.content,
+  });
+
+  if (error) {
+    throw new Error("Не удалось отправить сообщение");
+  }
+}
 
 export default function Chat() {
   const [messageText, setMessageText] = useState("");
@@ -51,16 +101,16 @@ export default function Chat() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["/api/messages", user?.id],
-    queryFn: () => messageApi.getMessages(user!.id),
+  const { data: messages = [], isLoading, error } = useQuery({
+    queryKey: ["supabase/messages", user?.id],
+    queryFn: () => getMessages(user!.id),
     enabled: !!user?.id,
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: messageApi.createMessage,
+    mutationFn: createMessage,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["supabase/messages", user?.id] });
       setMessageText("");
       toast({
         title: "Сообщение отправлено",
@@ -95,6 +145,29 @@ export default function Chat() {
     }
   };
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`messages-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["supabase/messages", user?.id] });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
+
   if (!user) {
     return null;
   }
@@ -110,11 +183,19 @@ export default function Chat() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Ошибка загрузки чата</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center pb-16">
-      {/* Карточка чата, ограниченная по высоте, чтобы поле ввода было видно */}
       <div className="w-full max-w-sm bg-card flex flex-col h-[calc(98vh-5rem)]">
-        {/* Header */}
         <div className="border-b border-border bg-blue-header text-white">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center space-x-3">
@@ -126,10 +207,9 @@ export default function Chat() {
             </div>
           </div>
 
-          {user && <UserProfile user={user} />}
+          {user && <UserProfile user={user as any} />}
         </div>
 
-        {/* Messages: прокручиваются только внутри этой области */}
         <ScrollArea className="flex-1 px-4">
           <div className="space-y-4 py-4">
             {messages.length === 0 ? (
@@ -143,9 +223,11 @@ export default function Chat() {
                 </p>
               </div>
             ) : (
-              messages.map((message: MessageWithDetails) => {
+              messages.map((message) => {
                 const isOwnMessage = message.senderId === user.id;
-                const initials = `${message.sender.firstName[0]}${message.sender.lastName[0]}`;
+                const senderFirst = message.sender?.firstName || "";
+                const senderLast = message.sender?.lastName || "";
+                const initials = `${senderFirst?.[0] || ""}${senderLast?.[0] || ""}` || "U";
 
                 return (
                   <div
@@ -156,20 +238,18 @@ export default function Chat() {
                   >
                     {!isOwnMessage && (
                       <Avatar className="w-8 h-8 mt-1">
-                        {message.sender.profileImage && (
+                        {message.sender?.profileImage && (
                           <AvatarImage src={message.sender.profileImage} />
                         )}
-                        <AvatarFallback className="text-xs">
-                          {initials}
-                        </AvatarFallback>
+                        <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                       </Avatar>
                     )}
 
                     <div className={`max-w-[80%] ${isOwnMessage ? "order-1" : ""}`}>
                       {!isOwnMessage && (
                         <div className="text-xs text-muted-foreground mb-1">
-                          {message.sender.firstName} {message.sender.lastName}
-                          {message.sender.role === "admin" && (
+                          {senderFirst} {senderLast}
+                          {message.sender?.role === "admin" && (
                             <span className="ml-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
                               Админ
                             </span>
@@ -184,27 +264,25 @@ export default function Chat() {
                             : "bg-muted text-foreground"
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap">
-                          {message.content}
-                        </p>
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                         <p
-  className={`text-xs mt-1 ${
-    isOwnMessage ? "text-blue-300" : "text-muted-foreground"
-  }`}
->
-  {message.createdAt ?? ""}
-</p>
+                          className={`text-xs mt-1 ${
+                            isOwnMessage ? "text-blue-300" : "text-muted-foreground"
+                          }`}
+                        >
+                          {format(new Date(message.createdAt), "dd.MM.yyyy HH:mm", {
+                            locale: ru,
+                          })}
+                        </p>
                       </div>
                     </div>
 
                     {isOwnMessage && (
                       <Avatar className="w-8 h-8 mt-1">
-                        {user.profileImage && (
-                          <AvatarImage src={user.profileImage} />
-                        )}
+                        {user.profileImage && <AvatarImage src={user.profileImage} />}
                         <AvatarFallback className="text-xs">
-                          {user.firstName[0]}
-                          {user.lastName[0]}
+                          {user.firstName?.[0] || ""}
+                          {user.lastName?.[0] || ""}
                         </AvatarFallback>
                       </Avatar>
                     )}
@@ -215,7 +293,6 @@ export default function Chat() {
           </div>
         </ScrollArea>
 
-        {/* Message Input: всегда видно, прямо над нижним краем карточки */}
         <div className="p-4 border-t border-border bg-card">
           <div className="flex items-end space-x-2">
             <div className="flex-1">
@@ -223,7 +300,7 @@ export default function Chat() {
                 placeholder="Напишите сообщение..."
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onKeyDown={handleKeyPress}
                 className="resize-none"
               />
             </div>
@@ -239,7 +316,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Фиксированный навбар поверх фона, но отделён от карточки чата */}
       <BottomNavigation />
     </div>
   );
