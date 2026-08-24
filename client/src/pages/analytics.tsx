@@ -55,7 +55,11 @@ export default function Analytics() {
   // Активности пользователя
   const { data: activities = [] } = useQuery({
     queryKey: ["/api/activities/user", user?.id, start, end],
-    queryFn: () => activityApi.getActivitiesByUser(user!.id, start, end),
+    queryFn: () =>
+      activityApi.getActivitiesByUser(user!.id, {
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+      }),
     enabled: !!user?.id,
   });
 
@@ -164,7 +168,7 @@ console.log("ANALYTICS holidays", holidays);
         </div>
 
 
-        <UserProfile user={user} />
+        {user && <UserProfile user={user} />}
       </header>
 
 
@@ -336,4 +340,4 @@ console.log("ANALYTICS holidays", holidays);
       <BottomNavigation />
     </div>
   );
-} 
+}

@@ -19,7 +19,9 @@ export async function apiRequest(
     credentials: "include",
   });
 
-  // временно уберём здесь throwIfResNotOk
+  // ✅ Восстанавливаем проверку ответа – ошибки HTTP теперь будут выбрасываться
+  await throwIfResNotOk(res);
+
   return res;
 }
 

@@ -35,9 +35,4 @@ return (
     <span>{timeString}</span>
   </div>
 );
-  return (
-    <div className="w-full px-4 py-2 flex items-center justify-end gap-3 bg-slate-900 text-white text-sm">
-      <span>{dateTimeString}</span>
-    </div>
-  );
 };

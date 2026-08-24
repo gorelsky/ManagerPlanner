@@ -12,6 +12,7 @@ import type {
   InsertActivity,
   ActivityWithDetails,
   EmployeeWithDetails,
+  ActivityStatus,
 } from "@shared/schema";
 
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
@@ -213,7 +214,7 @@ updateActivity: async (
   // Обновление статуса активности (выполнено / отменено и т.п.)
   updateActivityStatus: async (
     id: string,
-    status: string,
+    status: ActivityStatus,
   ): Promise<Activity> => {
     const res = await apiRequest("PATCH", `/api/activities/${id}/status`, {
       status,
@@ -230,6 +231,10 @@ updateActivity: async (
     }
 
     return res.json();
+  },
+
+  deleteActivity: async (id: string): Promise<void> => {
+    await apiRequest("DELETE", `/api/activities/${id}`);
   },
 
   // Календарная статистика активностей пользователя

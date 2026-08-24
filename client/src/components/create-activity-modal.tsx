@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { Clock, Calendar } from "lucide-react";
+import { Clock } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
-import { insertActivitySchema } from "@shared/schema";
 import { activityApi, cityApi, employeeApi, activityTypeApi } from "@/lib/api";
 import type { InsertActivity, ActivityWithDetails } from "@shared/schema";
 import { z } from "zod";
-import { parseISO } from "date-fns";
 
-const formSchema = insertActivitySchema.omit({ title: true }).extend({
+const formSchema = z.object({
+  userId: z.string().optional(),
+  typeId: z.string({ required_error: "Тип активности обязателен" }),
+  cityId: z.string({ required_error: "Город обязателен" }),
+  employeeId: z.string().optional(),
+  description: z.string().optional(),
   startDate: z.date({ required_error: "Дата начала обязательна" }),
   endDate: z.date({ required_error: "Дата окончания обязательна" }),
   startTime: z.string().min(1, "Время начала обязательно"),
   endTime: z.string().min(1, "Время окончания обязательно"),
-  typeId: z.string().min(1, "Тип активности обязателен"),
-  cityId: z.string().min(1, "Город обязателен"),
+  status: z.enum(["planned", "in_progress", "completed", "cancelled", "rescheduled"]).default("planned"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -60,7 +62,10 @@ export default function CreateActivityModal({
     },
   });
 
-  // Города зоны менеджера
+  const startDate = form.watch("startDate");
+  const selectedTypeId = form.watch("typeId");
+  const selectedCityId = form.watch("cityId");
+
   const { data: cities = [] } = useQuery({
     queryKey: ["/api/cities/manager", userId],
     queryFn: () => cityApi.getCitiesByManager(userId),
@@ -78,27 +83,23 @@ export default function CreateActivityModal({
     enabled: !!userId,
   });
 
-  const selectedTypeId = form.watch("typeId");
   const selectedType = activityTypes.find((type) => type.id === selectedTypeId);
-  const selectedCityId = form.watch("cityId");
-
   const filteredEmployees = employees.filter(
     (employee) => employee.cityId === selectedCityId,
   );
 
-  // Мутации: создание и обновление
   const createActivityMutation = useMutation({
     mutationFn: activityApi.createActivity,
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
-  queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
-  queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
-  toast({
-    title: "Успешно",
-    description: "Активность обновлена",
-  });
-  onOpenChange(false);
-},
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      toast({
+        title: "Успешно",
+        description: "Активность создана",
+      });
+      onOpenChange(false);
+    },
     onError: (error: any) => {
       toast({
         title: "Ошибка",
@@ -114,6 +115,7 @@ onSuccess: () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
       toast({
         title: "Успешно",
         description: "Активность обновлена",
@@ -129,31 +131,30 @@ onSuccess: () => {
     },
   });
 
-  // Если передана activityToEdit — заполняем форму её значениями
+  // Заполнение формы при редактировании – безопасная обработка дат
   useEffect(() => {
     if (activityToEdit) {
-      const start =
-        activityToEdit.startDate instanceof Date
-          ? activityToEdit.startDate
-          : parseISO(activityToEdit.startDate as unknown as string);
-      const end =
-        activityToEdit.endDate instanceof Date
-          ? activityToEdit.endDate
-          : parseISO(activityToEdit.endDate as unknown as string);
+      // Преобразуем даты в объекты Date, если они ещё не Date
+      const start = activityToEdit.startDate instanceof Date
+        ? activityToEdit.startDate
+        : new Date(activityToEdit.startDate);
+      const end = activityToEdit.endDate instanceof Date
+        ? activityToEdit.endDate
+        : new Date(activityToEdit.endDate);
 
-      const startTime = `${String(start.getHours()).padStart(2, "0")}:${String(
-        start.getMinutes(),
-      ).padStart(2, "0")}`;
-      const endTime = `${String(end.getHours()).padStart(2, "0")}:${String(
-        end.getMinutes(),
-      ).padStart(2, "0")}`;
+      // Проверка на валидность – если дата невалидная, используем сегодня
+      const safeStart = isNaN(start.getTime()) ? new Date() : start;
+      const safeEnd = isNaN(end.getTime()) ? new Date() : end;
+
+      const startTime = `${String(safeStart.getHours()).padStart(2, "0")}:${String(safeStart.getMinutes()).padStart(2, "0")}`;
+      const endTime = `${String(safeEnd.getHours()).padStart(2, "0")}:${String(safeEnd.getMinutes()).padStart(2, "0")}`;
 
       form.reset({
         userId: activityToEdit.userId,
         description: activityToEdit.description || "",
         status: activityToEdit.status,
-        startDate: start,
-        endDate: end,
+        startDate: safeStart,
+        endDate: safeEnd,
         startTime,
         endTime,
         typeId: activityToEdit.typeId,
@@ -186,40 +187,37 @@ onSuccess: () => {
     const endDateTime = new Date(data.endDate);
     endDateTime.setHours(endHour, endMinute, 0, 0);
 
-// Валидация: конец не раньше начала
-if (endDateTime.getTime() < startDateTime.getTime()) {
-  toast({
-    title: "Ошибка",
-    description: "Время окончания не может быть раньше времени начала",
-    variant: "destructive",
-  });
-  return;
-}
+    if (endDateTime.getTime() < startDateTime.getTime()) {
+      toast({
+        title: "Ошибка",
+        description: "Время окончания не может быть раньше времени начала",
+        variant: "destructive",
+      });
+      return;
+    }
 
-// Запрещаем редактирование прошлых дней по выбранной дате в форме
-const today = new Date();
-today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedStart = new Date(data.startDate);
+    selectedStart.setHours(0, 0, 0, 0);
 
-const selectedStart = new Date(data.startDate);
-selectedStart.setHours(0, 0, 0, 0);
-
-if (activityToEdit && selectedStart < today) {
-  toast({
-    title: "Нельзя изменить",
-    description: "Нельзя изменять активности прошлых дней",
-    variant: "destructive",
-  });
-  return;
-}
+    if (activityToEdit && selectedStart < today) {
+      toast({
+        title: "Нельзя изменить",
+        description: "Нельзя изменять активности прошлых дней",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const selectedType = activityTypes.find((type) => type.id === data.typeId);
     const activityTitle = selectedType?.name || "Активность";
 
     const activityData: InsertActivity = {
-      userId: data.userId,
+      userId: data.userId!,
       typeId: data.typeId,
       cityId: data.cityId,
-      employeeId: data.employeeId ? data.employeeId : undefined,
+      employeeId: data.employeeId || undefined,
       title: activityTitle,
       description: data.description,
       startDate: startDateTime,
@@ -240,146 +238,145 @@ if (activityToEdit && selectedStart < today) {
   const isSubmitting =
     createActivityMutation.isPending || updateActivityMutation.isPending;
 
-return (
-  <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent
-      className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto"
-      data-testid="create-activity-modal"
-    >
-      <DialogHeader>
-        <DialogTitle className="text-lg font-semibold">
-          {activityToEdit ? "Редактировать активность" : "Новая активность"}
-        </DialogTitle>
-      </DialogHeader>
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="max-w-sm mx-auto max-h-[90vh] overflow-y-auto"
+        data-testid="create-activity-modal"
+      >
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">
+            {activityToEdit ? "Редактировать активность" : "Новая активность"}
+          </DialogTitle>
+        </DialogHeader>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {/* Тип активности */}
-          <FormField
-            control={form.control}
-            name="typeId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Тип активности</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger data-testid="select-activity-type">
-                      <SelectValue placeholder="Выберите тип активности" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {activityTypes.map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
-                        {type.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Дата начала */}
-          <FormField
-            control={form.control}
-            name="startDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Дата начала</FormLabel>
-                <FormControl>
-                  <DatePicker
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="Выберите дату начала"
-                    data-testid="input-start-date"
-                    minDate={new Date()}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Дата окончания — НОВОЕ */}
-          <FormField
-            control={form.control}
-            name="endDate"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Дата окончания</FormLabel>
-                <FormControl>
-                  <DatePicker
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="Выберите дату окончания"
-                    data-testid="input-end-date"
-                    // не даём выбрать дату окончания раньше даты начала
-                    minDate={form.getValues("startDate") || new Date()}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Время начала / окончания внутри дня */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Тип активности */}
             <FormField
               control={form.control}
-              name="startTime"
+              name="typeId"
               render={({ field }) => (
-                <FormItem className="w-full">
-                  <FormLabel>Время начала</FormLabel>
+                <FormItem>
+                  <FormLabel>Тип активности</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-activity-type">
+                        <SelectValue placeholder="Выберите тип активности" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {activityTypes.map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Дата начала */}
+            <FormField
+              control={form.control}
+              name="startDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Дата начала</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                      <Input
-                        type="time"
-                        {...field}
-                        value={field.value || ""}
-                        className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-                        data-testid="input-start-time"
-                      />
-                    </div>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Выберите дату начала"
+                      data-testid="input-start-date"
+                      minDate={new Date()}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Дата окончания */}
             <FormField
               control={form.control}
-              name="endTime"
+              name="endDate"
               render={({ field }) => (
-                <FormItem className="w-full">
-                  <FormLabel>Время окончания</FormLabel>
+                <FormItem>
+                  <FormLabel>Дата окончания</FormLabel>
                   <FormControl>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
-                      <Input
-                        type="time"
-                        {...field}
-                        value={field.value || ""}
-                        className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
-                        data-testid="input-end-time"
-                      />
-                    </div>
+                    <DatePicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Выберите дату окончания"
+                      data-testid="input-end-date"
+                      minDate={startDate || new Date()}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-          </div>
 
-            {/* Город — только из зоны менеджера */}
+            {/* Время начала / окончания */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormLabel>Время начала</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Input
+                          type="time"
+                          {...field}
+                          value={field.value || ""}
+                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          data-testid="input-start-time"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="endTime"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormLabel>Время окончания</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Input
+                          type="time"
+                          {...field}
+                          value={field.value || ""}
+                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          data-testid="input-end-time"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Город */}
             <FormField
               control={form.control}
               name="cityId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Город</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value ?? ""}>
                     <FormControl>
                       <SelectTrigger data-testid="select-city">
                         <SelectValue placeholder="Выберите город" />
@@ -398,6 +395,7 @@ return (
               )}
             />
 
+            {/* Сотрудник (если требуется) */}
             {selectedType?.requiresEmployee && (
               <FormField
                 control={form.control}
@@ -435,6 +433,7 @@ return (
               />
             )}
 
+            {/* Описание */}
             <FormField
               control={form.control}
               name="description"

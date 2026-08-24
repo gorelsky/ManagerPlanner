@@ -1,14 +1,37 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import pgSession from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
+import { pool } from "./db"; // импортируем pool из db.ts
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
+// Ограничиваем размер входящих данных
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
+
+// Настройка сессий
+const PgStore = pgSession(session);
+app.use(
+  session({
+    store: new PgStore({
+      pool: pool,
+      tableName: "session", // таблица создастся автоматически
+    }),
+    secret: process.env.SESSION_SECRET || "your-secret-key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 неделя
+    },
+  })
+);
+
+// Логирование (без изменений)
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -42,30 +65,23 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  // Глобальный обработчик ошибок – теперь без throw err
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    console.error("Global error handler:", err);
     res.status(status).json({ message });
-    throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // This serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5002", 10);
-
   server.listen(port, "127.0.0.1", () => {
-    console.log(`serving on http://127.0.0.1:${port}`);
+    console.log(`Сервер запущен на http://127.0.0.1:${port}`);
   });
 })();

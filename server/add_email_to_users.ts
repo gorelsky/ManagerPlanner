@@ -1,5 +1,9 @@
 import { sql } from "drizzle-orm";
-import type { Migration } from "./types"; // если у тебя есть общий тип
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+
+type Migration = (
+  db: NodePgDatabase<typeof import("@shared/schema")>,
+) => Promise<void>;
 
 export const up: Migration = async (db) => {
   await db.execute(

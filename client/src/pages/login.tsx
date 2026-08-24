@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.jpg";
+import { supabase } from "@/supabase";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -21,33 +22,46 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
+      // 1. Вход через Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: username,
+        password,
       });
 
-      if (response.ok) {
-        const user = await response.json();
-        login(user);
-        toast({
-          title: "Вход выполнен успешно",
-          description: `Добро пожаловать, ${user.firstName} ${user.middleName} ${user.lastName}!`,
-        });
-      } else {
-        const error = await response.json();
-        toast({
-          title: "Ошибка входа",
-          description: error.message || "Неверный логин или пароль",
-          variant: "destructive",
-        });
+      if (error) throw error;
+
+      const user = data.user;
+      if (!user) throw new Error("Пользователь не найден");
+
+      // 2. Отправляем access_token на сервер для создания сессии
+      const res = await fetch("/api/auth/supabase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: data.session?.access_token }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Ошибка создания сессии");
       }
-    } catch (error) {
+
+      const serverUser = await res.json();
+
+      // 3. Вызываем login из контекста (передаём пользователя, полученного с сервера)
+      await login(serverUser);
+
+      toast({
+        title: "Вход выполнен успешно",
+        description: `Добро пожаловать, ${serverUser.firstName || serverUser.email}!`,
+      });
+
+      // Очищаем поля
+      setUsername("");
+      setPassword("");
+    } catch (error: any) {
       toast({
         title: "Ошибка",
-        description: "Не удалось выполнить вход. Попробуйте еще раз.",
+        description: error?.message || "Не удалось выполнить вход. Попробуйте еще раз.",
         variant: "destructive",
       });
     } finally {
@@ -58,7 +72,6 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-200 dark:bg-gray-900 p-4">
       <div className="w-full max-w-4xl mx-auto">
-        {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="mx-auto w-24 h-24 mb-4 flex items-center justify-center">
             <img
@@ -75,7 +88,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Login Form */}
         <Card className="shadow-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
@@ -88,11 +100,11 @@ export default function Login() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Логин</Label>
+                <Label htmlFor="username">Email</Label>
                 <Input
                   id="username"
-                  type="text"
-                  placeholder="Введите логин"
+                  type="email"
+                  placeholder="Введите email"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required

@@ -60,7 +60,7 @@ import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi, holidaysApi, userApi } from "@/lib/api";
-import type { ActivityWithDetails, User } from "@shared/schema";
+import type { ActivityStatus, ActivityWithDetails, User } from "@shared/schema";
 import {
   PieChart,
   Pie,
@@ -377,7 +377,7 @@ export default function Dashboard() {
 
   // ── Mutations ───────────────────────────────────────────────
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => activityApi.updateActivityStatus(id, status),
+    mutationFn: ({ id, status }: { id: string; status: ActivityStatus }) => activityApi.updateActivityStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });

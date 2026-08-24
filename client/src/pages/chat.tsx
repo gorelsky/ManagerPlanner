@@ -10,12 +10,14 @@ import SideMenu from "@/components/side-menu";
 import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
 import type { MessageWithDetails, InsertMessage } from "@shared/schema";
 
+type ChatMessage = Omit<MessageWithDetails, "createdAt"> & {
+  createdAt: string | null;
+};
+
 const messageApi = {
-  getMessages: (userId: string) =>
+  getMessages: (userId: string): Promise<ChatMessage[]> =>
     fetch(`/api/messages/${userId}`).then((res) => {
       if (!res.ok) {
         throw new Error("Не удалось загрузить сообщения");
@@ -143,7 +145,7 @@ export default function Chat() {
                 </p>
               </div>
             ) : (
-              messages.map((message: MessageWithDetails) => {
+              messages.map((message) => {
                 const isOwnMessage = message.senderId === user.id;
                 const initials = `${message.sender.firstName[0]}${message.sender.lastName[0]}`;
 
