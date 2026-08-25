@@ -7,6 +7,15 @@ import { setupVite, serveStatic, log } from "./vite";
 import { pool } from "./db"; // импортируем pool из db.ts
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
+const sessionSecret = process.env.SESSION_SECRET;
+
+if (isProduction && !sessionSecret) {
+  throw new Error("SESSION_SECRET must be set in production");
+}
+
+// Railway terminates HTTPS at its proxy. Trust it so secure cookies work.
+app.set("trust proxy", 1);
 
 // Ограничиваем размер входящих данных
 app.use(express.json({ limit: "1mb" }));
@@ -17,15 +26,17 @@ const PgStore = pgSession(session);
 app.use(
   session({
     store: new PgStore({
-      pool: pool,
-      tableName: "session", // таблица создастся автоматически
+      pool,
+      tableName: "session",
+      createTableIfMissing: true,
     }),
-    secret: process.env.SESSION_SECRET || "your-secret-key",
+    secret: sessionSecret || "development-only-secret",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: isProduction,
       httpOnly: true,
+      sameSite: "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 1 неделя
     },
   })
@@ -62,6 +73,13 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: Math.round(process.uptime()),
+  });
+});
+
 (async () => {
   const server = await registerRoutes(app);
 
@@ -81,7 +99,8 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5002", 10);
-  server.listen(port, "127.0.0.1", () => {
-    console.log(`Сервер запущен на http://127.0.0.1:${port}`);
+  const host = process.env.HOST || "0.0.0.0";
+  server.listen(port, host, () => {
+    console.log(`Сервер запущен на http://${host}:${port}`);
   });
 })();

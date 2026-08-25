@@ -2,7 +2,6 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
-import { supabase } from "./supabase";
 import {
   insertUserSchema,
   insertCitySchema,

@@ -1,7 +1,0 @@
-com.company.managerplanner.test.app-core-1.7.0-0 C:\Users\e.gorelskiy\.gradle\caches\8.14.3\transforms\e7cc64b7d7a5ea0fa62c1d7854b4ea4a\transformed\core-1.7.0\res
-com.company.managerplanner.test.app-tracing-1.2.0-1 C:\Users\e.gorelskiy\.gradle\caches\8.14.3\transforms\f537c5316932970c000fffd492e7c42a\transformed\tracing-1.2.0\res
-com.company.managerplanner.test.app-androidTest-2 D:\ManagerPlanner\ManagerPlanner\android\app\build\generated\res\resValues\androidTest\debug
-com.company.managerplanner.test.app-updated_navigation_xml-3 D:\ManagerPlanner\ManagerPlanner\android\app\build\generated\updated_navigation_xml\debugAndroidTest
-com.company.managerplanner.test.app-mergeDebugAndroidTestResources-4 D:\ManagerPlanner\ManagerPlanner\android\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
-com.company.managerplanner.test.app-mergeDebugAndroidTestResources-5 D:\ManagerPlanner\ManagerPlanner\android\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
-com.company.managerplanner.test.app-debugAndroidTest-6 D:\ManagerPlanner\ManagerPlanner\android\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
