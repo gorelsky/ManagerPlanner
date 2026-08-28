@@ -78,25 +78,27 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-200 dark:bg-gray-900 p-4">
-      <div className="w-full max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <div className="mx-auto w-24 h-24 mb-4 flex items-center justify-center">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#f7f7ff] via-white to-[#e8e7ff] p-4 flex items-center justify-center">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl" />
+      <div className="relative w-full max-w-md mx-auto">
+        <div className="text-center mb-7">
+          <div className="mx-auto w-44 h-28 mb-4 flex items-center justify-center rounded-3xl bg-white shadow-xl shadow-primary/10 border border-white">
             <img
               src={logo}
               alt="Логотип"
-              className="max-w-full max-h-full object-contain"
+              className="h-24 w-40 rounded-2xl object-contain"
             />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground mb-2">
             Планировщик для ТМ
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-muted-foreground">
             Система управления активностями
           </p>
         </div>
 
-        <Card className="shadow-xl">
+        <Card className="border-white/80 bg-white/90 shadow-2xl shadow-primary/10 backdrop-blur-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
               Вход в систему

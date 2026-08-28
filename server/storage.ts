@@ -54,6 +54,7 @@ export interface IStorage {
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
   getAllEmployees(limit?: number, offset?: number): Promise<EmployeeWithDetails[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
+  updateEmployeeMaternityStatus(id: string, isOnMaternityLeave: boolean): Promise<Employee | undefined>;
   deleteEmployee(id: string): Promise<boolean>;
   importEmployees(csvData: string): Promise<{ imported: number }>;
 
@@ -333,6 +334,7 @@ export class DatabaseStorage implements IStorage {
         position: employees.position,
         phone: employees.phone,
         email: employees.email,
+        isOnMaternityLeave: employees.isOnMaternityLeave,
         manager: users,
         city: cities,
       })
@@ -362,6 +364,7 @@ export class DatabaseStorage implements IStorage {
         position: employees.position,
         phone: employees.phone,
         email: employees.email,
+        isOnMaternityLeave: employees.isOnMaternityLeave,
         manager: users,
         city: cities,
       })
@@ -479,6 +482,18 @@ export class DatabaseStorage implements IStorage {
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
     const [employee] = await db.insert(employees).values(insertEmployee).returning();
     return employee;
+  }
+
+  async updateEmployeeMaternityStatus(
+    id: string,
+    isOnMaternityLeave: boolean,
+  ): Promise<Employee | undefined> {
+    const [employee] = await db
+      .update(employees)
+      .set({ isOnMaternityLeave })
+      .where(eq(employees.id, id))
+      .returning();
+    return employee || undefined;
   }
 
   async deleteEmployee(id: string): Promise<boolean> {

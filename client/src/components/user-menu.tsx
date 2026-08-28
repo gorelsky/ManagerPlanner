@@ -48,7 +48,7 @@ export default function UserMenu() {
                 alt={`${user.firstName} ${user.lastName}`}
               />
             ) : null}
-            <AvatarFallback className="bg-blue-100 text-blue-600">
+            <AvatarFallback className="bg-primary/10 text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>

@@ -30,7 +30,7 @@ const timeString = now.toLocaleTimeString("ru-RU", {
 });
 
 return (
-  <div className="w-full px-4 py-2 flex items-center justify-end gap-3 bg-slate-900 text-white text-sm">
+  <div className="w-full px-4 py-1.5 flex items-center justify-end gap-3 bg-gradient-to-r from-[#160b72] to-[#2514b7] text-white/90 text-xs font-medium tracking-wide">
     <span>{dateString}</span>
     <span>{timeString}</span>
   </div>

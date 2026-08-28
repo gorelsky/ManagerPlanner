@@ -155,7 +155,7 @@ export default function ActivityCard({
                 </button>
               )}
               <button
-                className="rounded p-1 text-blue-600 hover:bg-blue-100"
+                className="rounded-lg p-1.5 text-primary hover:bg-primary/10"
                 onClick={() => onEdit(activity)}
                 title="Редактировать план (потребуется повторное согласование)"
                 data-testid="button-edit-activity"

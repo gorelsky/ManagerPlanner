@@ -109,23 +109,23 @@ export default function BottomNavigation() {
 
   return (
     <nav
-      className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-card border-t border-border"
+      className="fixed bottom-2 left-1/2 z-40 w-[calc(100%-1rem)] max-w-xl -translate-x-1/2 rounded-2xl border border-white/70 bg-card/95 px-1 shadow-xl shadow-primary/10 backdrop-blur-xl"
       data-testid="bottom-navigation"
     >
-      <div className="flex items-center justify-around py-2">
+      <div className="flex items-center justify-around py-1.5">
         {navItems.map(({ path, icon: Icon, label, testId }) => (
-          <Link key={path} href={path}>
+          <Link key={path} href={path} className="min-w-0 flex-1">
             <button
               className={cn(
-                "flex flex-col items-center space-y-1 p-2 transition-colors",
+                "mx-auto flex min-h-12 w-full min-w-0 flex-col items-center justify-center space-y-0.5 rounded-xl px-1.5 py-1.5 transition-all duration-200",
                 location === path
-                  ? "text-blue-600"
-                  : "text-muted-foreground hover:text-foreground",
+                  ? "bg-primary/10 text-primary shadow-inner"
+                  : "text-muted-foreground hover:bg-accent hover:text-primary",
               )}
               data-testid={testId}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-xs font-medium">{label}</span>
+              <span className="max-w-full truncate text-[11px] font-semibold">{label}</span>
             </button>
           </Link>
         ))}

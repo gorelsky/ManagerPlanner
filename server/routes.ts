@@ -466,6 +466,28 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
+  app.patch("/api/employees/:id/maternity", requireSystemAdmin, async (req, res) => {
+    try {
+      const { isOnMaternityLeave } = z
+        .object({ isOnMaternityLeave: z.boolean() })
+        .parse(req.body);
+      const employee = await storage.updateEmployeeMaternityStatus(
+        req.params.id,
+        isOnMaternityLeave,
+      );
+      if (!employee) {
+        return res.status(404).json({ message: "Медицинский представитель не найден" });
+      }
+      res.json(employee);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Некорректное значение признака декрета" });
+      }
+      console.error("Update employee maternity status error:", error);
+      res.status(500).json({ message: "Не удалось изменить признак декрета" });
+    }
+  });
+
   app.get("/api/manager-cities/all", requireAdmin, async (_req, res) => {
     try {
       const assignments = await storage.getAllManagerCities();

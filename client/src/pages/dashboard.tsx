@@ -573,7 +573,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mt-2">
           <h3 className="text-white font-medium">План-факт активностей</h3>
           <Button
-            className="ml-auto px-3 py-1 rounded bg-green-600 text-white text-sm"
+            className="ml-auto px-3 py-1 text-sm bg-white text-primary hover:bg-white/90 shadow-lg"
             onClick={() => {
               setEditingActivity(null);
               setCreateModalOpen(true);
@@ -589,7 +589,7 @@ export default function Dashboard() {
           <Button
             size="sm"
             variant={viewMode === "list" ? "default" : "outline"}
-            className={viewMode === "list" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+            className={viewMode === "list" ? "bg-white text-primary hover:bg-white/90" : "border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"}
             onClick={() => setViewMode("list")}
           >
             <List className="w-4 h-4 mr-1" /> Список
@@ -597,7 +597,7 @@ export default function Dashboard() {
           <Button
             size="sm"
             variant={viewMode === "calendar" ? "default" : "outline"}
-            className={viewMode === "calendar" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+            className={viewMode === "calendar" ? "bg-white text-primary hover:bg-white/90" : "border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"}
             onClick={() => setViewMode("calendar")}
           >
             <CalendarIcon className="w-4 h-4 mr-1" /> Календарь
@@ -606,7 +606,7 @@ export default function Dashboard() {
             <Button
               size="sm"
               variant={viewMode === "analytics" ? "default" : "outline"}
-              className={viewMode === "analytics" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "border-emerald-600 text-emerald-700"}
+              className={viewMode === "analytics" ? "bg-white text-primary hover:bg-white/90" : "border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"}
               onClick={() => setViewMode("analytics")}
             >
               <BarChart3 className="w-4 h-4 mr-1" /> Аналитика
@@ -957,7 +957,7 @@ export default function Dashboard() {
                           {stats ? (
                             <div className="mt-auto space-y-0.5 text-[10px]">
                               {stats.planned > 0 && (
-                                <div className="flex items-center justify-between text-blue-600">
+                                <div className="flex items-center justify-between text-primary">
                                   <span>План</span><span>{stats.planned}</span>
                                 </div>
                               )}
@@ -996,7 +996,7 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600" /><span>План</span></div>
+                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary" /><span>План</span></div>
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /><span>В процессе</span></div>
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-600" /><span>Выполнено</span></div>
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600" /><span>Отменено</span></div>
@@ -1121,7 +1121,7 @@ export default function Dashboard() {
       {/* Floating Action Button */}
       {canCreatePlans && (
         <button
-          className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center"
+          className="fixed bottom-24 right-4 w-14 h-14 bg-primary text-white rounded-2xl shadow-xl shadow-primary/30 hover:bg-primary/90 transition-all flex items-center justify-center"
           onClick={() => {
             setEditingActivity(null);
             setCreateModalOpen(true);

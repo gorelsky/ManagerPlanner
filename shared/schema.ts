@@ -79,6 +79,7 @@ export const employees = pgTable(
     position: text("position").default("Медицинский представитель"),
     phone: text("phone"),
     email: text("email"),
+    isOnMaternityLeave: boolean("is_on_maternity_leave").notNull().default(false),
   },
   (table) => ({
     managerIdx: index("employees_manager_idx").on(table.managerId),

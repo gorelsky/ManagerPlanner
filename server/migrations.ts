@@ -18,6 +18,9 @@ export async function runDatabaseMigrations(): Promise<void> {
     WHERE status = 'completed'
       AND approval_status = 'created';
 
+    ALTER TABLE employees
+      ADD COLUMN IF NOT EXISTS is_on_maternity_leave boolean NOT NULL DEFAULT false;
+
   `);
 
   console.log("Database migrations applied");

@@ -330,12 +330,12 @@ export default function CreateActivityModal({
                     <FormLabel>Время начала</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary pointer-events-none" />
                         <Input
                           type="time"
                           {...field}
                           value={field.value || ""}
-                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          className="w-[84%] pl-10 bg-accent focus:bg-card focus:ring-2 focus:ring-primary/25"
                           data-testid="input-start-time"
                         />
                       </div>
@@ -353,12 +353,12 @@ export default function CreateActivityModal({
                     <FormLabel>Время окончания</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600 pointer-events-none" />
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary pointer-events-none" />
                         <Input
                           type="time"
                           {...field}
                           value={field.value || ""}
-                          className="w-[84%] pl-10 bg-emerald-50 focus:bg-emerald-100 focus:ring-2 focus:ring-emerald-300"
+                          className="w-[84%] pl-10 bg-accent focus:bg-card focus:ring-2 focus:ring-primary/25"
                           data-testid="input-end-time"
                         />
                       </div>
@@ -423,6 +423,7 @@ export default function CreateActivityModal({
                         {filteredEmployees.map((employee) => (
                           <SelectItem key={employee.id} value={employee.id}>
                             {employee.lastName} {employee.firstName} {employee.middleName}
+                            {employee.isOnMaternityLeave ? " — декрет" : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -32,7 +32,7 @@ export default function SideMenu() {
           <Menu className="w-6 h-6" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-3/4 sm:max-w-xs bg-blue-header text-white border-blue-500">
+      <SheetContent side="left" className="w-[86%] sm:max-w-sm bg-blue-header text-white border-white/10 shadow-2xl">
         <SheetHeader>
           <SheetTitle className="text-white text-left">
             <div className="flex items-center space-x-2">
@@ -71,13 +71,13 @@ export default function SideMenu() {
         </SheetHeader>
 
         <div className="mt-8 flex flex-col space-y-2">
-          <div className="px-4 py-3 rounded-lg bg-white/10">
+          <div className="px-4 py-3 rounded-xl border border-white/10 bg-white/10 backdrop-blur-sm">
             <p className="text-xs text-white/60">Логин</p>
             <p className="text-sm font-medium">@{user.username}</p>
           </div>
 
           {user.role === "admin" && (
-            <div className="px-4 py-3 rounded-lg bg-white/10 flex items-center space-x-2">
+            <div className="px-4 py-3 rounded-xl border border-white/10 bg-white/10 flex items-center space-x-2">
               <Shield className="w-4 h-4 text-yellow-200" />
               <span className="text-sm">Права администратора</span>
             </div>
@@ -85,7 +85,7 @@ export default function SideMenu() {
 
           <Link href="/instructions" onClick={() => setOpen(false)}>
             <div
-              className="px-4 py-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors flex items-center space-x-2 cursor-pointer"
+              className="px-4 py-3 rounded-xl border border-white/10 bg-white/10 hover:bg-white/20 transition-colors flex items-center space-x-2 cursor-pointer"
               data-testid="link-instructions"
             >
               <BookOpen className="w-4 h-4 text-green-100" />

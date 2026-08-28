@@ -43,7 +43,7 @@ export default function Instructions() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="w-5 h-5 text-blue-600" />
+              <ClipboardList className="w-5 h-5 text-primary" />
               Быстрый старт
             </CardTitle>
           </CardHeader>
@@ -136,7 +136,7 @@ export default function Instructions() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <BarChart3 className="w-5 h-5 text-blue-600" />Аналитика
+                <BarChart3 className="w-5 h-5 text-primary" />Аналитика
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">

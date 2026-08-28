@@ -187,7 +187,7 @@ export default function Chat() {
                       <div
                         className={`rounded-lg px-3 py-2 ${
                           isOwnMessage
-                            ? "bg-blue-600 text-white"
+                            ? "bg-primary text-white shadow-md shadow-primary/15"
                             : "bg-muted text-foreground"
                         }`}
                       >
@@ -238,7 +238,7 @@ export default function Chat() {
               onClick={handleSendMessage}
               disabled={!messageText.trim() || sendMessageMutation.isPending}
               size="icon"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-primary hover:bg-primary/90"
             >
               <Send className="w-4 h-4" />
             </Button>

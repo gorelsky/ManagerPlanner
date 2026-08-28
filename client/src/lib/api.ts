@@ -102,6 +102,14 @@ export const employeeApi = {
   createEmployee: (employee: InsertEmployee): Promise<Employee> =>
     apiRequest("POST", "/api/employees", employee).then((res) => res.json()),
 
+  updateMaternityStatus: (
+    id: string,
+    isOnMaternityLeave: boolean,
+  ): Promise<Employee> =>
+    apiRequest("PATCH", `/api/employees/${id}/maternity`, {
+      isOnMaternityLeave,
+    }).then((res) => res.json()),
+
   deleteEmployee: (id: string): Promise<void> =>
     apiRequest("DELETE", `/api/employees/${id}`).then(() => {}),
 

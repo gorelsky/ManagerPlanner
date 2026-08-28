@@ -215,7 +215,7 @@ export default function Analytics() {
             className="bg-muted rounded-lg p-4 text-center"
             data-testid="stat-total"
           >
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-primary">
               {totalActivities}
             </div>
             <div className="text-sm text-muted-foreground">
@@ -303,7 +303,7 @@ export default function Analytics() {
                     radius={[4, 4, 0, 0]}
                   >
                     {chartData.map((entry, index) => {
-                      let color = "hsl(211, 26%, 46%)"; // обычный день
+                      let color = "hsl(246, 82%, 42%)"; // корпоративный цвет
                       if (entry.isWeekend) color = "#EF4444"; // выходной — красный
                       if (entry.isHoliday) color = "#F97316"; // праздник — оранжевый
 

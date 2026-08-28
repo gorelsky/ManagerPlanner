@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -267,6 +268,35 @@ export default function Admin() {
     },
   });
 
+  const updateMaternityMutation = useMutation({
+    mutationFn: ({ id, isOnMaternityLeave }: { id: string; isOnMaternityLeave: boolean }) =>
+      employeeApi.updateMaternityStatus(id, isOnMaternityLeave),
+    onSuccess: (updatedEmployee) => {
+      queryClient.setQueryData(
+        ["/api/employees/all"],
+        (old: EmployeeWithDetails[] | undefined) =>
+          (old ?? []).map((employee) =>
+            employee.id === updatedEmployee.id
+              ? { ...employee, isOnMaternityLeave: updatedEmployee.isOnMaternityLeave }
+              : employee,
+          ),
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/employees/manager"] });
+      toast({
+        title: updatedEmployee.isOnMaternityLeave
+          ? "МП отмечен как находящийся в декрете"
+          : "Признак декрета снят",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка изменения статуса",
+        description: error.message || "Не удалось изменить признак декрета",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateActivityMutation = useMutation({
     mutationFn: (payload: { id: string; data: Partial<ActivityWithDetails> }) =>
       activityApi.updateActivity(payload.id, payload.data),
@@ -465,7 +495,7 @@ export default function Admin() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center space-x-2">
-                <Users className="w-5 h-5 text-blue-600" />
+                <Users className="w-5 h-5 text-primary" />
                 <div>
                   <p className="text-sm text-muted-foreground">Всего МП</p>
                   <p className="text-xl font-semibold">
@@ -749,7 +779,7 @@ export default function Admin() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between text-base">
-                <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-600" />Загруженные города</span>
+                <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Загруженные города</span>
                 <Badge variant="secondary">{allCities.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -851,7 +881,7 @@ export default function Admin() {
                   className="flex items-center justify-between mb-3"
                 >
                   <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 overflow-hidden flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 overflow-hidden flex items-center justify-center">
                       {manager.profileImage ? (
                         <img
                           src={manager.profileImage}
@@ -859,7 +889,7 @@ export default function Admin() {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <span className="text-blue-600 font-semibold text-sm">
+                        <span className="text-primary font-semibold text-sm">
                           {manager.firstName.charAt(0)}
                           {manager.lastName.charAt(0)}
                         </span>
@@ -935,11 +965,15 @@ export default function Admin() {
                   {allEmployees.map((employee: EmployeeWithDetails) => (
                     <div
                       key={employee.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className={`flex flex-col gap-3 p-3 border rounded-xl sm:flex-row sm:items-center sm:justify-between ${
+                        employee.isOnMaternityLeave
+                          ? "border-primary/15 bg-primary/[0.035] text-muted-foreground"
+                          : "bg-card"
+                      }`}
                     >
                       <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold text-sm">
+                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                          <span className="text-primary font-semibold text-sm">
                             {employee.firstName.charAt(0)}
                             {employee.lastName.charAt(0)}
                           </span>
@@ -949,6 +983,11 @@ export default function Admin() {
                             {employee.lastName} {employee.firstName}{" "}
                             {employee.middleName}
                           </p>
+                          {employee.isOnMaternityLeave && (
+                            <Badge variant="outline" className="mt-1 border-primary/25 bg-primary/5 text-primary">
+                              Декрет
+                            </Badge>
+                          )}
                           <p className="text-sm text-muted-foreground">
                             {employee.city?.name}
                             {employee.city?.region
@@ -959,12 +998,27 @@ export default function Admin() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary" className="text-xs">
                           {employee.position}
                         </Badge>
                         {user?.role === "admin" && (
-                          <AlertDialog>
+                          <>
+                            <label className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground">
+                              <Switch
+                                checked={employee.isOnMaternityLeave}
+                                disabled={updateMaternityMutation.isPending}
+                                onCheckedChange={(checked) =>
+                                  updateMaternityMutation.mutate({
+                                    id: employee.id,
+                                    isOnMaternityLeave: checked,
+                                  })
+                                }
+                                aria-label={`Признак декрета: ${employee.lastName} ${employee.firstName}`}
+                              />
+                              Декрет
+                            </label>
+                            <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
@@ -995,7 +1049,8 @@ export default function Admin() {
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
-                          </AlertDialog>
+                            </AlertDialog>
+                          </>
                         )}
                       </div>
                     </div>

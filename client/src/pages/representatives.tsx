@@ -63,7 +63,11 @@ export default function Representatives() {
             {representatives.map((rep: EmployeeWithDetails) => (
               <Card
                 key={rep.id}
-                className="p-4"
+                className={`p-4 transition-all ${
+                  rep.isOnMaternityLeave
+                    ? "border-primary/15 bg-primary/[0.035] opacity-65 grayscale-[35%]"
+                    : ""
+                }`}
                 data-testid={`card-representative-${rep.id}`}
               >
                 <div className="flex items-start space-x-4">
@@ -74,7 +78,7 @@ export default function Representatives() {
                         alt={`${rep.firstName} ${rep.lastName}`}
                       />
                     ) : null}
-                    <AvatarFallback className="bg-blue-100 text-blue-600 text-lg">
+                    <AvatarFallback className="bg-primary/10 text-primary text-lg">
                       {getInitials(rep.firstName, rep.lastName)}
                     </AvatarFallback>
                   </Avatar>
@@ -97,7 +101,7 @@ export default function Representatives() {
                         </p>
                       </div>
                       <Badge variant="secondary" className="text-xs">
-                        МП
+                        {rep.isOnMaternityLeave ? "Декрет" : "МП"}
                       </Badge>
                     </div>
 

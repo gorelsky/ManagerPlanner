@@ -204,8 +204,8 @@ export default function Reports() {
         {/* Сводные плашки */}
         <div className="flex gap-3 mb-6 flex-wrap">
           <div className="flex-1 min-w-[100px] bg-blue-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-blue-600">{activitiesInRange.length}</div>
-            <div className="text-xs text-blue-500 mt-0.5">Активностей</div>
+            <div className="text-2xl font-bold text-primary">{activitiesInRange.length}</div>
+            <div className="text-xs text-primary/70 mt-0.5">Активностей</div>
           </div>
           <div className="flex-1 min-w-[100px] bg-emerald-50 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-emerald-600">{managersArray.length}</div>
