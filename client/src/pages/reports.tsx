@@ -92,8 +92,9 @@ export default function Reports() {
     : getWeekRange(weekStart);
 
   const activitiesInRange: ActivityWithDetails[] = allActivities.filter((a) => {
-    const d = new Date(a.startDate);
-    return d >= range.start && d <= range.end;
+    const activityStart = new Date(a.startDate);
+    const activityEnd = new Date(a.endDate);
+    return activityStart <= range.end && activityEnd >= range.start;
   });
 
   // ── По менеджерам ──

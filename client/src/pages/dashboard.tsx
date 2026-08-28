@@ -339,19 +339,35 @@ export default function Dashboard() {
   const privilegedCalendarMap = useMemo(() => {
     const map: Record<string, CalendarStats> = {};
     for (const a of filteredActivities) {
-      const dayKey = format(new Date(a.startDate), "yyyy-MM-dd");
-      if (!map[dayKey]) {
-        map[dayKey] = { date: dayKey, planned: 0, inProgress: 0, completed: 0, cancelled: 0, rescheduled: 0 };
+      const activityStart = new Date(a.startDate);
+      const activityEnd = new Date(a.endDate);
+      activityStart.setHours(0, 0, 0, 0);
+      activityEnd.setHours(0, 0, 0, 0);
+
+      // В календаре директора многодневная активность должна отображаться
+      // в каждый день своего интервала, как и в календаре менеджера.
+      const currentDay = new Date(Math.max(activityStart.getTime(), startDate.getTime()));
+      currentDay.setHours(0, 0, 0, 0);
+      const lastDay = new Date(Math.min(activityEnd.getTime(), endDate.getTime()));
+      lastDay.setHours(0, 0, 0, 0);
+
+      while (currentDay <= lastDay) {
+        const dayKey = format(currentDay, "yyyy-MM-dd");
+        if (!map[dayKey]) {
+          map[dayKey] = { date: dayKey, planned: 0, inProgress: 0, completed: 0, cancelled: 0, rescheduled: 0 };
+        }
+        const { status } = a;
+        if (status === "planned") map[dayKey].planned += 1;
+        else if (status === "in_progress") map[dayKey].inProgress += 1;
+        else if (status === "completed") map[dayKey].completed += 1;
+        else if (status === "cancelled") map[dayKey].cancelled += 1;
+        else if (status === "rescheduled") map[dayKey].rescheduled += 1;
+
+        currentDay.setDate(currentDay.getDate() + 1);
       }
-      const { status } = a;
-      if (status === "planned") map[dayKey].planned += 1;
-      else if (status === "in_progress") map[dayKey].inProgress += 1;
-      else if (status === "completed") map[dayKey].completed += 1;
-      else if (status === "cancelled") map[dayKey].cancelled += 1;
-      else if (status === "rescheduled") map[dayKey].rescheduled += 1;
     }
     return map;
-  }, [filteredActivities]);
+  }, [filteredActivities, currentDate]);
 
   const calendarStatsMap = useMemo(() => {
     if (isPrivileged) return privilegedCalendarMap;

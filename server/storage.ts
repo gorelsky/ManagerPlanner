@@ -562,7 +562,7 @@ export class DatabaseStorage implements IStorage {
     endDate?: Date,
   ): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [eq(activities.userId, userId)];
-    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (startDate) conditions.push(gte(activities.endDate, startDate));
     if (endDate) conditions.push(lte(activities.startDate, endDate));
     return this.queryActivities(conditions);
   }
@@ -574,7 +574,7 @@ export class DatabaseStorage implements IStorage {
     offset?: number,
   ): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [];
-    if (startDate) conditions.push(gte(activities.startDate, startDate));
+    if (startDate) conditions.push(gte(activities.endDate, startDate));
     if (endDate) conditions.push(lte(activities.startDate, endDate));
     return this.queryActivities(conditions, limit, offset);
   }
