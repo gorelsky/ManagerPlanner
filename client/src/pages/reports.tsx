@@ -156,7 +156,7 @@ export default function Reports() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-10 bg-background border-b px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-10 bg-blue-header text-white border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <SideMenu />
         <h1 className="text-lg font-semibold">Отчёты</h1>
         <div className="w-8" />
