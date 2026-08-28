@@ -176,6 +176,11 @@ export default function Chat() {
                               Админ
                             </span>
                           )}
+                          {message.sender.role === "hr_director" && (
+                            <span className="ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded text-xs">
+                              HR-директор
+                            </span>
+                          )}
                         </div>
                       )}
 

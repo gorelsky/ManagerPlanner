@@ -31,6 +31,10 @@ type Period = "week" | "month" | "quarter";
 export default function Analytics() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
   const { user } = useAuth();
+  const canViewAllPlans =
+    user?.role === "admin" ||
+    user?.role === "director" ||
+    user?.role === "hr_director";
 
 
   const getPeriodDates = (period: Period) => {
@@ -52,15 +56,22 @@ export default function Analytics() {
   const { start, end } = getPeriodDates(selectedPeriod);
 
 
-  // Активности пользователя
+  // Для руководителей — общая аналитика, для менеджера — только собственная.
   const { data: activities = [] } = useQuery({
-    queryKey: ["/api/activities/user", user?.id, start, end],
-    queryFn: () =>
-      activityApi.getActivitiesByUser(user!.id, {
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-      }),
+    queryKey: [
+      canViewAllPlans ? "/api/activities/all" : "/api/activities/user",
+      user?.id,
+      start,
+      end,
+    ],
+    queryFn: () => canViewAllPlans
+      ? activityApi.getAllActivities(start, end)
+      : activityApi.getActivitiesByUser(user!.id, {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }),
     enabled: !!user?.id,
+    refetchOnWindowFocus: true,
   });
 
 

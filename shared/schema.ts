@@ -27,7 +27,7 @@ export const APPROVAL_STATUSES = ["created", "approved", "rejected"] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 // Константа для ролей пользователей
-export const USER_ROLES = ["admin", "manager", "director"] as const;
+export const USER_ROLES = ["admin", "manager", "director", "hr_director"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 /* === Таблицы === */

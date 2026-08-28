@@ -74,7 +74,23 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 function requireManagerOrAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-  if (req.user.role !== "admin" && req.user.role !== "director" && req.user.role !== "manager") {
+  if (!["admin", "director", "manager", "hr_director"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+  next();
+}
+
+function requirePlanEditor(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+  if (!["admin", "director", "manager"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Роль HR-директора доступна только для просмотра" });
+  }
+  next();
+}
+
+function requireAllPlansViewer(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+  if (!["admin", "director", "hr_director"].includes(req.user.role)) {
     return res.status(403).json({ message: "Forbidden" });
   }
   next();
@@ -210,7 +226,9 @@ app.post("/api/auth/supabase", async (req, res) => {
         middleName: user.user_metadata?.middle_name || "",
         role: user.email?.toLowerCase() === "t.loginova@sls-pharma.ru"
           ? "director"
-          : "manager",
+          : user.email?.toLowerCase() === "k.gadeliya@sls-pharma.ru"
+            ? "hr_director"
+            : "manager",
         profileImage: user.user_metadata?.avatar_url || "",
       });
     } else {
@@ -466,7 +484,7 @@ app.post("/api/auth/supabase", async (req, res) => {
   });
 
   // ----- Маршруты для активностей -----
-  app.get("/api/activities/all", requireAdmin, async (req, res) => {
+  app.get("/api/activities/all", requireAllPlansViewer, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
       const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
@@ -515,7 +533,7 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
-  app.post("/api/activities", requireManagerOrAdmin, async (req, res) => {
+  app.post("/api/activities", requirePlanEditor, async (req, res) => {
     try {
       const body = parseDateFields(req.body, ["startDate", "endDate"]);
       const now = new Date();
@@ -550,7 +568,7 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
-  app.patch("/api/activities/:id", requireManagerOrAdmin, async (req, res) => {
+  app.patch("/api/activities/:id", requirePlanEditor, async (req, res) => {
     try {
       const id = req.params.id;
       const existing = await storage.getActivity(id);
@@ -590,7 +608,7 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
-  app.patch("/api/activities/:id/status", requireManagerOrAdmin, async (req, res) => {
+  app.patch("/api/activities/:id/status", requirePlanEditor, async (req, res) => {
     try {
       const id = req.params.id;
       const { status } = activityStatusSchema.parse(req.body);
@@ -648,7 +666,7 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
-  app.delete("/api/activities/:id", requireManagerOrAdmin, async (req, res) => {
+  app.delete("/api/activities/:id", requirePlanEditor, async (req, res) => {
     try {
       const existing = await storage.getActivity(req.params.id);
       if (!existing) {
@@ -688,7 +706,10 @@ app.post("/api/auth/supabase", async (req, res) => {
   // ----- Маршруты для сообщений -----
   app.get("/api/messages/:userId", requireManagerOrAdmin, async (req, res) => {
     try {
-      const userId = req.params.userId;
+      if (req.params.userId !== req.user?.id) {
+        return res.status(403).json({ message: "Нельзя читать сообщения от имени другого пользователя" });
+      }
+      const userId = req.user.id;
       const messages = await storage.getMessages(userId);
       const formatted = messages.map((message) => ({
         ...message,
@@ -705,7 +726,10 @@ app.post("/api/auth/supabase", async (req, res) => {
 
   app.post("/api/messages", requireManagerOrAdmin, async (req, res) => {
     try {
-      const messageData = insertMessageSchema.parse(req.body);
+      const messageData = insertMessageSchema.parse({
+        ...req.body,
+        senderId: req.user!.id,
+      });
       const message = await storage.createMessage(messageData);
       const formatted = {
         ...message,

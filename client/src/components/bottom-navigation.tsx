@@ -9,8 +9,34 @@ export default function BottomNavigation() {
 
   const navItems = [];
 
-  if (user?.role === "director") {
-    // Директор: Админ → Отчёты → Чат
+  if (user?.role === "hr_director") {
+    navItems.push({
+      path: "/",
+      icon: PenTool,
+      label: "Планы",
+      testId: "nav-plans",
+    });
+    navItems.push({
+      path: "/analytics",
+      icon: BarChart3,
+      label: "Аналитика",
+      testId: "nav-analytics",
+    });
+    navItems.push({
+      path: "/chat",
+      icon: MessageCircle,
+      label: "Чат",
+      testId: "nav-chat",
+    });
+  } else if (user?.role === "director") {
+    // Директор: Планы → Админ → Отчёты → Чат
+    navItems.push({
+      path: "/",
+      icon: PenTool,
+      label: "Планы",
+      testId: "nav-plans",
+    });
+
     navItems.push({
       path: "/admin",
       icon: Settings,

@@ -180,7 +180,12 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  const isPrivileged = user?.role === "admin" || user?.role === "director";
+  const isPrivileged =
+    user?.role === "admin" ||
+    user?.role === "director" ||
+    user?.role === "hr_director";
+  const canReview = user?.role === "admin" || user?.role === "director";
+  const canCreatePlans = user?.role !== "hr_director";
 
   // Dates
   const startDate = startOfMonth(currentDate);
@@ -812,7 +817,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
-              {isPrivileged && (
+              {canReview && (
                 <div className="flex items-center gap-3 mb-3">
                   <Button variant="ghost" size="sm" onClick={selectAll}>
                     Выбрать все
@@ -858,7 +863,7 @@ export default function Dashboard() {
                       <div className="space-y-2 pb-2 px-2">
                         {dayActivities.map((activity) => (
                           <div key={activity.id} className="flex items-start gap-2">
-                            {isPrivileged && (
+                            {canReview && (
                               <div className="pt-2">
                                 <Checkbox
                                   checked={selectedIds.has(activity.id)}
@@ -871,7 +876,7 @@ export default function Dashboard() {
                               <ActivityCard
                                 activity={activity}
                                 currentUserId={user?.id}
-                                canReview={isPrivileged}
+                                canReview={canReview}
                                 onMarkComplete={handleMarkComplete}
                                 onEdit={handleEdit}
                                 onCancel={handleCancel}
@@ -1098,16 +1103,18 @@ export default function Dashboard() {
       )}
 
       {/* Floating Action Button */}
-      <button
-        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center"
-        onClick={() => {
-          setEditingActivity(null);
-          setCreateModalOpen(true);
-        }}
-        data-testid="button-floating-add"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {canCreatePlans && (
+        <button
+          className="fixed bottom-20 right-4 w-14 h-14 bg-blue-header text-white rounded-full shadow-lg hover:bg-green-600 transition-colors flex items-center justify-center"
+          onClick={() => {
+            setEditingActivity(null);
+            setCreateModalOpen(true);
+          }}
+          data-testid="button-floating-add"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
 
       <BottomNavigation />
 

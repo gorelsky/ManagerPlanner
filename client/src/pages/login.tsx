@@ -22,32 +22,40 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      // 1. Вход через Supabase
+      let serverUser;
+
+      // Основной вход через Supabase.
       const { data, error } = await supabase.auth.signInWithPassword({
         email: username,
         password,
       });
 
-      if (error) throw error;
+      if (!error && data.user && data.session?.access_token) {
+        const res = await fetch("/api/auth/supabase", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ access_token: data.session.access_token }),
+        });
 
-      const user = data.user;
-      if (!user) throw new Error("Пользователь не найден");
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || "Ошибка создания сессии");
+        }
+        serverUser = await res.json();
+      } else {
+        // Резервный вход для локальных учетных записей приложения.
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
 
-      // 2. Отправляем access_token на сервер для создания сессии
-      const res = await fetch("/api/auth/supabase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: data.session?.access_token }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Ошибка создания сессии");
+        if (!res.ok) {
+          throw new Error(error?.message || "Неверный логин или пароль");
+        }
+        serverUser = await res.json();
       }
 
-      const serverUser = await res.json();
-
-      // 3. Вызываем login из контекста (передаём пользователя, полученного с сервера)
       await login(serverUser);
 
       toast({

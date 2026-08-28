@@ -20,6 +20,8 @@ export default function SideMenu() {
       ? "Администратор"
       : user.role === "director"
       ? "Директор"
+      : user.role === "hr_director"
+      ? "HR-директор"
       : "Менеджер";
 
   return (
