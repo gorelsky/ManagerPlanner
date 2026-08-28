@@ -22,6 +22,7 @@ import {
   endOfMonth,
   startOfQuarter,
   endOfQuarter,
+  format,
 } from "date-fns";
 
 
@@ -89,7 +90,7 @@ export default function Analytics() {
   // Множество дат-праздников "YYYY-MM-DD"
   const holidayDates = new Set(
     holidays.map((h: any) =>
-      new Date(h.date).toISOString().slice(0, 10),
+      format(new Date(h.date), "yyyy-MM-dd"),
     ),
   );
 
@@ -128,15 +129,21 @@ export default function Analytics() {
 
 
     while (cursor <= end) {
-      const dayKey = cursor.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const dayKey = format(cursor, "yyyy-MM-dd");
+      const dayStart = new Date(cursor);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(cursor);
+      dayEnd.setHours(23, 59, 59, 999);
 
 
       const completedForDay = activities.filter((a) => {
-        const dateStr =
-          a.startDate instanceof Date
-            ? a.startDate.toISOString().slice(0, 10)
-            : String(a.startDate).slice(0, 10);
-        return a.status === "completed" && dateStr === dayKey;
+        const activityStart = new Date(a.startDate);
+        const activityEnd = new Date(a.endDate);
+        return (
+          a.status === "completed" &&
+          activityStart <= dayEnd &&
+          activityEnd >= dayStart
+        );
       }).length;
 
 
@@ -163,11 +170,7 @@ export default function Analytics() {
 
     return days;
   })();
-console.log("chartData[0]", chartData[0]);
-console.log("chartData[1]", chartData[1]);
-console.log("ANALYTICS chartData", chartData);
-console.log("ANALYTICS period", start.toISOString(), end.toISOString());
-console.log("ANALYTICS holidays", holidays);
+
   return (
     <div className="min-h-screen pb-20">
       {/* Header */}

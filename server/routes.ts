@@ -80,6 +80,14 @@ function requireManagerOrAdmin(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
+function requireSystemAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Действие доступно только администратору" });
+  }
+  next();
+}
+
 function requirePlanEditor(req: Request, res: Response, next: NextFunction) {
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
   if (!["admin", "director", "manager"].includes(req.user.role)) {
@@ -458,6 +466,29 @@ app.post("/api/auth/supabase", async (req, res) => {
     }
   });
 
+  app.get("/api/manager-cities/all", requireAdmin, async (_req, res) => {
+    try {
+      const assignments = await storage.getAllManagerCities();
+      res.json(assignments);
+    } catch (error) {
+      console.error("Get manager cities error:", error);
+      res.status(500).json({ message: "Не удалось загрузить города менеджеров" });
+    }
+  });
+
+  app.delete("/api/employees/:id", requireSystemAdmin, async (req, res) => {
+    try {
+      const deleted = await storage.deleteEmployee(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Медицинский представитель не найден" });
+      }
+      res.status(204).end();
+    } catch (error) {
+      console.error("Delete employee error:", error);
+      res.status(500).json({ message: "Не удалось удалить медицинского представителя" });
+    }
+  });
+
   // ----- Маршруты для типов активностей -----
   app.get("/api/activity-types", async (_req, res) => {
     try {
@@ -758,6 +789,16 @@ app.post("/api/auth/supabase", async (req, res) => {
   });
 
   // ----- Праздничные дни -----
+  app.get("/api/holidays/all", requireAdmin, async (_req, res) => {
+    try {
+      const allHolidays = await storage.getAllHolidays();
+      res.json(allHolidays);
+    } catch (error) {
+      console.error("Get all holidays error:", error);
+      res.status(500).json({ message: "Не удалось загрузить праздничные дни" });
+    }
+  });
+
   app.get("/api/holidays", async (req, res) => {
     try {
       const yearParam = req.query.year;

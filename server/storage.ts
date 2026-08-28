@@ -24,6 +24,7 @@ import {
   type Message,
   type InsertMessage,
   type MessageWithDetails,
+  type ManagerCityWithDetails,
   type Holiday,
   type InsertHoliday,
 } from "@shared/schema";
@@ -46,12 +47,14 @@ export interface IStorage {
   importCities(csvData: string): Promise<{ imported: number }>;
 
   getCitiesByManager(managerId: string): Promise<City[]>;
+  getAllManagerCities(): Promise<ManagerCityWithDetails[]>;
   importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }>;
 
   // Employees
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
   getAllEmployees(limit?: number, offset?: number): Promise<EmployeeWithDetails[]>;
   createEmployee(employee: InsertEmployee): Promise<Employee>;
+  deleteEmployee(id: string): Promise<boolean>;
   importEmployees(csvData: string): Promise<{ imported: number }>;
 
   // Activity Types
@@ -105,6 +108,7 @@ export interface IStorage {
 
   // Holidays
   getHolidaysByYear(year: number): Promise<Holiday[]>;
+  getAllHolidays(): Promise<Holiday[]>;
   importHolidaysFromCsv(csvData: string): Promise<{ imported: number }>;
 }
 
@@ -207,6 +211,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(managerCities.managerId, managerId))
       .orderBy(asc(cities.name));
     return rows.map((row) => row.city);
+  }
+
+  async getAllManagerCities(): Promise<ManagerCityWithDetails[]> {
+    return await db
+      .select({
+        id: managerCities.id,
+        managerId: managerCities.managerId,
+        cityId: managerCities.cityId,
+        manager: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          middleName: users.middleName,
+        },
+        city: {
+          id: cities.id,
+          name: cities.name,
+          region: cities.region,
+        },
+      })
+      .from(managerCities)
+      .innerJoin(users, eq(managerCities.managerId, users.id))
+      .innerJoin(cities, eq(managerCities.cityId, cities.id))
+      .orderBy(asc(users.lastName), asc(users.firstName), asc(cities.name));
   }
 
   async importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }> {
@@ -450,6 +479,23 @@ export class DatabaseStorage implements IStorage {
   async createEmployee(insertEmployee: InsertEmployee): Promise<Employee> {
     const [employee] = await db.insert(employees).values(insertEmployee).returning();
     return employee;
+  }
+
+  async deleteEmployee(id: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      // Исторические планы сохраняем, удаляя только ссылку на бывшего МП.
+      await tx
+        .update(activities)
+        .set({ employeeId: null, updatedAt: new Date() })
+        .where(eq(activities.employeeId, id));
+
+      const deleted = await tx
+        .delete(employees)
+        .where(eq(employees.id, id))
+        .returning({ id: employees.id });
+
+      return deleted.length > 0;
+    });
   }
 
   /* === Activity types === */
@@ -992,6 +1038,10 @@ export class DatabaseStorage implements IStorage {
         ),
       )
       .orderBy(asc(holidays.date));
+  }
+
+  async getAllHolidays(): Promise<Holiday[]> {
+    return await db.select().from(holidays).orderBy(asc(holidays.date));
   }
 
   async createHoliday(insertHoliday: InsertHoliday): Promise<Holiday> {

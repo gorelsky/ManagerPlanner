@@ -371,6 +371,11 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type ManagerCity = typeof managerCities.$inferSelect;
 export type InsertManagerCity = z.infer<typeof insertManagerCitySchema>;
 
+export type ManagerCityWithDetails = ManagerCity & {
+  manager: Pick<PublicUser, "id" | "username" | "firstName" | "lastName" | "middleName">;
+  city: City;
+};
+
 export type Holiday = typeof holidays.$inferSelect;
 export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 

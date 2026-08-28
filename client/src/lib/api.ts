@@ -14,6 +14,8 @@ import type {
   EmployeeWithDetails,
   ActivityStatus,
   ApprovalStatus,
+  Holiday,
+  ManagerCityWithDetails,
 } from "@shared/schema";
 
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
@@ -80,6 +82,9 @@ export const cityApi = {
     apiRequest("POST", "/api/manager-cities/import", { csvData }).then((res) =>
       res.json(),
     ),
+
+  getAllManagerCities: (): Promise<ManagerCityWithDetails[]> =>
+    apiRequest("GET", "/api/manager-cities/all").then((res) => res.json()),
 };
 
 // Employees
@@ -96,6 +101,9 @@ export const employeeApi = {
 
   createEmployee: (employee: InsertEmployee): Promise<Employee> =>
     apiRequest("POST", "/api/employees", employee).then((res) => res.json()),
+
+  deleteEmployee: (id: string): Promise<void> =>
+    apiRequest("DELETE", `/api/employees/${id}`).then(() => {}),
 
   importEmployees: (csvData: string): Promise<{ imported: number }> =>
     apiRequest("POST", "/api/employees/import", { csvData }).then((res) =>
@@ -284,6 +292,9 @@ export const holidaysApi = {
       res.json(),
     );
   },
+
+  getAllHolidays: (): Promise<Holiday[]> =>
+    apiRequest("GET", "/api/holidays/all").then((res) => res.json()),
 };
 
 // Chat

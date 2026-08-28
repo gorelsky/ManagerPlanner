@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, Download, Users, Settings } from "lucide-react";
+import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 import { useToast } from "@/hooks/use-toast";
 import BottomNavigation from "@/components/bottom-navigation";
@@ -20,7 +31,7 @@ import {
   cityApi,
   holidaysApi,
 } from "@/lib/api";
-import type { EmployeeWithDetails, ActivityWithDetails } from "@shared/schema";
+import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails } from "@shared/schema";
 
 type DayBucket = {
   date: Date;
@@ -222,6 +233,40 @@ export default function Admin() {
     },
   });
 
+  const { data: allCities = [], isLoading: citiesLoading } = useQuery<City[]>({
+    queryKey: ["/api/cities"],
+    queryFn: () => cityApi.getCities(),
+  });
+
+  const { data: allManagerCities = [], isLoading: managerCitiesLoading } = useQuery<ManagerCityWithDetails[]>({
+    queryKey: ["/api/manager-cities/all"],
+    queryFn: () => cityApi.getAllManagerCities(),
+  });
+
+  const { data: allHolidays = [], isLoading: holidaysLoading } = useQuery<Holiday[]>({
+    queryKey: ["/api/holidays/all"],
+    queryFn: () => holidaysApi.getAllHolidays(),
+  });
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: (id: string) => employeeApi.deleteEmployee(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees/manager"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      toast({
+        title: "Медицинский представитель удалён",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка удаления МП",
+        description: error.message || "Не удалось удалить медицинского представителя",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateActivityMutation = useMutation({
     mutationFn: (payload: { id: string; data: Partial<ActivityWithDetails> }) =>
       activityApi.updateActivity(payload.id, payload.data),
@@ -270,6 +315,7 @@ export default function Admin() {
   const importManagerCitiesMutation = useMutation({
     mutationFn: (data: string) => cityApi.importManagerCities(data),
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/manager-cities/all"] });
       toast({
         title: "Импорт городов менеджеров завершен",
         description: `Импортировано связей: ${result.imported}`,
@@ -369,6 +415,7 @@ export default function Admin() {
     try {
       setIsImportingHolidays(true);
       const result = await holidaysApi.importHolidays(holidaysCsv);
+      queryClient.invalidateQueries({ queryKey: ["/api/holidays/all"] });
       toast({
         title: "Импорт праздников завершен",
         description: `Импортировано праздников: ${result.imported ?? 0}`,
@@ -698,6 +745,94 @@ export default function Admin() {
           </>
         )}
 
+        <div className="grid gap-4 lg:grid-cols-3 mb-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-blue-600" />Загруженные города</span>
+                <Badge variant="secondary">{allCities.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {citiesLoading ? (
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+              ) : allCities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Города не загружены</p>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {allCities.map((city) => (
+                    <div key={city.id} className="rounded-md border p-2">
+                      <p className="text-sm font-medium">{city.name}</p>
+                      <p className="text-xs text-muted-foreground">{city.region || "Регион не указан"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2"><Users className="w-4 h-4 text-emerald-600" />Города менеджеров</span>
+                <Badge variant="secondary">{allManagerCities.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {managerCitiesLoading ? (
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+              ) : allManagerCities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Закрепления не загружены</p>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {allManagerCities.map((assignment) => (
+                    <div key={assignment.id} className="rounded-md border p-2">
+                      <p className="text-sm font-medium">
+                        {assignment.manager.lastName} {assignment.manager.firstName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {assignment.city.name}{assignment.city.region ? ` · ${assignment.city.region}` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-orange-600" />Праздничные дни</span>
+                <Badge variant="secondary">{allHolidays.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {holidaysLoading ? (
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+              ) : allHolidays.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Праздники не загружены</p>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {allHolidays.map((holiday) => (
+                    <div key={holiday.id} className="rounded-md border p-2">
+                      <p className="text-sm font-medium">{holiday.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(holiday.date).toLocaleDateString("ru-RU", {
+                          day: "2-digit",
+                          month: "long",
+                          year: "numeric",
+                          timeZone: "UTC",
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Менеджеры</CardTitle>
@@ -824,9 +959,45 @@ export default function Admin() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {employee.position}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {employee.position}
+                        </Badge>
+                        {user?.role === "admin" && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                disabled={deleteEmployeeMutation.isPending}
+                                aria-label={`Удалить ${employee.lastName} ${employee.firstName}`}
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Удалить
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Удалить медицинского представителя?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  {employee.lastName} {employee.firstName} {employee.middleName || ""}
+                                  будет удалён из списка. Ранее созданные планы сохранятся.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-red-600 hover:bg-red-700"
+                                  onClick={() => deleteEmployeeMutation.mutate(employee.id)}
+                                >
+                                  Удалить
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
