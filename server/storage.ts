@@ -18,6 +18,7 @@ import {
   type InsertActivityType,
   type Activity,
   type ActivityStatus,
+  type ApprovalStatus,
   type InsertActivity,
   type ActivityWithDetails,
   type Message,
@@ -77,6 +78,11 @@ export interface IStorage {
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;
   updateActivityStatus(id: string, status: ActivityStatus): Promise<Activity>;
+  updateActivityApproval(
+    id: string,
+    approvalStatus: Exclude<ApprovalStatus, "created">,
+    reviewedBy: string,
+  ): Promise<Activity>;
   getActivityCalendarStatsByUser(
     userId: string,
     startDate: Date,
@@ -699,6 +705,10 @@ export class DatabaseStorage implements IStorage {
         startDate: activities.startDate,
         endDate: activities.endDate,
         status: activities.status,
+        approvalStatus: activities.approvalStatus,
+        reviewedBy: activities.reviewedBy,
+        reviewedAt: activities.reviewedAt,
+        completedAt: activities.completedAt,
         createdAt: activities.createdAt,
         updatedAt: activities.updatedAt,
         type: activityTypes,
@@ -745,6 +755,10 @@ export class DatabaseStorage implements IStorage {
         startDate: activities.startDate,
         endDate: activities.endDate,
         status: activities.status,
+        approvalStatus: activities.approvalStatus,
+        reviewedBy: activities.reviewedBy,
+        reviewedAt: activities.reviewedAt,
+        completedAt: activities.completedAt,
         createdAt: activities.createdAt,
         updatedAt: activities.updatedAt,
         type: activityTypes,
@@ -834,6 +848,9 @@ export class DatabaseStorage implements IStorage {
       .update(activities)
       .set({
         ...updateActivity,
+        approvalStatus: "created",
+        reviewedBy: null,
+        reviewedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(activities.id, id))
@@ -846,6 +863,28 @@ export class DatabaseStorage implements IStorage {
       .update(activities)
       .set({
         status,
+        completedAt: status === "completed" ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, id))
+      .returning();
+    if (!activity) {
+      throw new Error("Activity not found");
+    }
+    return activity;
+  }
+
+  async updateActivityApproval(
+    id: string,
+    approvalStatus: Exclude<ApprovalStatus, "created">,
+    reviewedBy: string,
+  ): Promise<Activity> {
+    const [activity] = await db
+      .update(activities)
+      .set({
+        approvalStatus,
+        reviewedBy,
+        reviewedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(activities.id, id))

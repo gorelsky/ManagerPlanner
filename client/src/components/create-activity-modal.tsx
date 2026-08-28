@@ -95,8 +95,8 @@ export default function CreateActivityModal({
       queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
       toast({
-        title: "Успешно",
-        description: "Активность создана",
+        title: "План создан",
+        description: "План отправлен директору на согласование",
       });
       onOpenChange(false);
     },
@@ -117,8 +117,8 @@ export default function CreateActivityModal({
       queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
       toast({
-        title: "Успешно",
-        description: "Активность обновлена",
+        title: "План обновлён",
+        description: "Изменённый план отправлен на повторное согласование",
       });
       onOpenChange(false);
     },

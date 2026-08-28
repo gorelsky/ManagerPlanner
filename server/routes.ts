@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
+import { runDatabaseMigrations } from "./migrations";
 import {
   insertUserSchema,
   insertCitySchema,
@@ -40,9 +41,6 @@ declare module "express-session" {
 // ===================== Middleware =====================
 
 async function authenticate(req: Request, res: Response, next: NextFunction) {
-  console.log("[Authenticate] Session ID:", req.sessionID);
-  console.log("[Authenticate] Session data:", req.session);
-  console.log("[Authenticate] userId:", req.session?.userId);
   try {
     const userId = req.session?.userId;
     if (!userId) {
@@ -106,6 +104,10 @@ const activityStatusSchema = z.object({
   status: z.enum(ACTIVITY_STATUSES),
 });
 
+const activityApprovalSchema = z.object({
+  approvalStatus: z.enum(["approved", "rejected"]),
+});
+
 async function hashPassword(password: string): Promise<string> {
   const saltRounds = 10;
   return bcrypt.hash(password, saltRounds);
@@ -114,6 +116,8 @@ async function hashPassword(password: string): Promise<string> {
 // ===================== Регистрация маршрутов =====================
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await runDatabaseMigrations();
+
   try {
     await storage.initializeUsers();
     await storage.initializeCities();
@@ -204,7 +208,9 @@ app.post("/api/auth/supabase", async (req, res) => {
         firstName: user.user_metadata?.first_name || "",
         lastName: user.user_metadata?.last_name || "",
         middleName: user.user_metadata?.middle_name || "",
-        role: "manager",
+        role: user.email?.toLowerCase() === "t.loginova@sls-pharma.ru"
+          ? "director"
+          : "manager",
         profileImage: user.user_metadata?.avatar_url || "",
       });
     } else {
@@ -460,7 +466,7 @@ app.post("/api/auth/supabase", async (req, res) => {
   });
 
   // ----- Маршруты для активностей -----
-  app.get("/api/activities/all", requireManagerOrAdmin, async (req, res) => {
+  app.get("/api/activities/all", requireAdmin, async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
       const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : undefined;
@@ -476,6 +482,9 @@ app.post("/api/auth/supabase", async (req, res) => {
 
   app.get("/api/activities/user/:userId", requireManagerOrAdmin, async (req, res) => {
     try {
+      if (req.user?.role === "manager" && req.params.userId !== req.user.id) {
+        return res.status(403).json({ message: "Нельзя просматривать чужие планы" });
+      }
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
       const activities = await storage.getActivitiesByUser(
@@ -495,6 +504,9 @@ app.post("/api/auth/supabase", async (req, res) => {
       const activity = await storage.getActivity(req.params.id);
       if (!activity) {
         return res.status(404).json({ message: "Activity not found" });
+      }
+      if (req.user?.role === "manager" && activity.userId !== req.user.id) {
+        return res.status(403).json({ message: "Нельзя просматривать чужой план" });
       }
       res.json(activity);
     } catch (error) {
@@ -516,7 +528,11 @@ app.post("/api/auth/supabase", async (req, res) => {
       if (body.startDate && body.endDate && body.startDate >= body.endDate) {
         return res.status(400).json({ message: "Дата окончания должна быть позже даты начала" });
       }
-      const activityData = insertActivitySchema.parse(body);
+      const activityData = insertActivitySchema.parse({
+        ...body,
+        userId: req.user?.role === "manager" ? req.user.id : body.userId,
+        status: "planned",
+      });
       const activity = await storage.createActivity(activityData);
       res.status(201).json(activity);
     } catch (error) {
@@ -537,8 +553,22 @@ app.post("/api/auth/supabase", async (req, res) => {
   app.patch("/api/activities/:id", requireManagerOrAdmin, async (req, res) => {
     try {
       const id = req.params.id;
+      const existing = await storage.getActivity(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      if (req.user?.role === "manager" && existing.userId !== req.user.id) {
+        return res.status(403).json({ message: "Нельзя изменять чужой план" });
+      }
+      if (existing.status === "completed") {
+        return res.status(400).json({ message: "Выполненный план нельзя редактировать" });
+      }
       const raw = req.body;
       const dataToValidate = parseDateFields(raw, ["startDate", "endDate"]);
+      if (req.user?.role === "manager") {
+        delete dataToValidate.userId;
+        delete dataToValidate.status;
+      }
       if (dataToValidate.startDate && dataToValidate.endDate && dataToValidate.startDate >= dataToValidate.endDate) {
         return res.status(400).json({ message: "Дата окончания должна быть позже даты начала" });
       }
@@ -568,7 +598,13 @@ app.post("/api/auth/supabase", async (req, res) => {
       if (!existing) {
         return res.status(404).json({ message: "Activity not found" });
       }
+      if (existing.userId !== req.user?.id) {
+        return res.status(403).json({ message: "Только автор плана может изменить выполнение" });
+      }
       if (status === "completed") {
+        if (existing.approvalStatus !== "approved") {
+          return res.status(400).json({ message: "Сначала план должен утвердить директор" });
+        }
         const now = new Date();
         const endDateTime = new Date(existing.endDate);
         if (now.getTime() < endDateTime.getTime()) {
@@ -581,6 +617,32 @@ app.post("/api/auth/supabase", async (req, res) => {
       console.error("Update activity status error:", error);
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid status value", errors: error.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/activities/:id/approval", requireAdmin, async (req, res) => {
+    try {
+      const { approvalStatus } = activityApprovalSchema.parse(req.body);
+      const existing = await storage.getActivity(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Activity not found" });
+      }
+      if (existing.status === "completed") {
+        return res.status(400).json({ message: "Выполненный план нельзя пересогласовать" });
+      }
+
+      const activity = await storage.updateActivityApproval(
+        req.params.id,
+        approvalStatus,
+        req.user!.id,
+      );
+      res.json(activity);
+    } catch (error) {
+      console.error("Update activity approval error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Недопустимое решение по плану", errors: error.errors });
       }
       res.status(500).json({ message: "Internal server error" });
     }

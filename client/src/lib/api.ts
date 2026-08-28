@@ -13,6 +13,7 @@ import type {
   ActivityWithDetails,
   EmployeeWithDetails,
   ActivityStatus,
+  ApprovalStatus,
 } from "@shared/schema";
 
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
@@ -228,6 +229,25 @@ updateActivity: async (
 
       const serverMessage = data?.message;
       throw new Error(serverMessage || "Не удалось обновить статус активности");
+    }
+
+    return res.json();
+  },
+
+  updateActivityApproval: async (
+    id: string,
+    approvalStatus: Exclude<ApprovalStatus, "created">,
+  ): Promise<Activity> => {
+    const res = await apiRequest("PATCH", `/api/activities/${id}/approval`, {
+      approvalStatus,
+    });
+
+    if (!res.ok) {
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {}
+      throw new Error(data?.message || "Не удалось согласовать план");
     }
 
     return res.json();

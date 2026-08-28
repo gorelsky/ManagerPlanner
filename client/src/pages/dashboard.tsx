@@ -60,7 +60,7 @@ import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi, holidaysApi, userApi } from "@/lib/api";
-import type { ActivityStatus, ActivityWithDetails, User } from "@shared/schema";
+import type { ActivityStatus, ActivityWithDetails, ApprovalStatus, User } from "@shared/schema";
 import {
   PieChart,
   Pie,
@@ -97,6 +97,12 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   rescheduled: { label: "Перенесено",    color: "#8b5cf6", bg: "bg-violet-500" },
 };
 
+const APPROVAL_CONFIG: Record<ApprovalStatus, { label: string }> = {
+  created: { label: "Создан" },
+  approved: { label: "Утверждён" },
+  rejected: { label: "Отклонён" },
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatManagerName(u: User) {
@@ -120,6 +126,7 @@ function exportActivitiesToCsv(activities: ActivityWithDetails[], filename: stri
     "Тип",
     "Город",
     "Статус",
+    "Согласование",
     "Сотрудник",
     "Название",
     "Описание",
@@ -131,6 +138,7 @@ function exportActivitiesToCsv(activities: ActivityWithDetails[], filename: stri
     a.type?.name || "—",
     a.city?.name || "—",
     STATUS_CONFIG[a.status]?.label || a.status,
+    APPROVAL_CONFIG[a.approvalStatus || "created"].label,
     a.employee
       ? `${a.employee.lastName || ""} ${a.employee.firstName || ""}`.trim()
       : "—",
@@ -164,6 +172,7 @@ export default function Dashboard() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [managerFilter, setManagerFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [approvalFilter, setApprovalFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
 
@@ -196,6 +205,8 @@ export default function Dashboard() {
         endDate: endDate.toISOString(),
       }),
     enabled: !!user?.id,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const {
@@ -205,6 +216,8 @@ export default function Dashboard() {
     queryKey: ["/api/activities/all", startDate.toISOString(), endDate.toISOString()],
     queryFn: () => activityApi.getAllActivities(startDate, endDate),
     enabled: isPrivileged,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   // Calendar stats (for manager view)
@@ -215,6 +228,8 @@ export default function Dashboard() {
     queryKey: ["/api/activities/calendar/user", user?.id, startDate, endDate],
     queryFn: () => activityApi.getActivityCalendarStatsByUser(user!.id, startDate, endDate),
     enabled: !!user?.id,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   // Holidays
@@ -245,6 +260,9 @@ export default function Dashboard() {
       if (statusFilter !== "all") {
         list = list.filter((a) => a.status === statusFilter);
       }
+      if (approvalFilter !== "all") {
+        list = list.filter((a) => (a.approvalStatus || "created") === approvalFilter);
+      }
       if (typeFilter !== "all") {
         list = list.filter((a) => a.typeId === typeFilter || a.type?.name === typeFilter);
       }
@@ -272,7 +290,7 @@ export default function Dashboard() {
     }
 
     return list;
-  }, [baseActivities, isPrivileged, managerFilter, statusFilter, typeFilter, cityFilter, searchTerm]);
+  }, [baseActivities, isPrivileged, managerFilter, statusFilter, approvalFilter, typeFilter, cityFilter, searchTerm]);
 
   // Grouping for privileged list view
   const groupedActivities = useMemo(() => {
@@ -390,6 +408,22 @@ export default function Dashboard() {
     },
   });
 
+  const updateApprovalMutation = useMutation({
+    mutationFn: ({ id, approvalStatus }: { id: string; approvalStatus: Exclude<ApprovalStatus, "created"> }) =>
+      activityApi.updateActivityApproval(id, approvalStatus),
+    onSuccess: (_activity, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/user"] });
+      toast({
+        title: variables.approvalStatus === "approved" ? "План утверждён" : "План отклонён",
+      });
+      setSelectedIds(new Set());
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка согласования", description: error.message, variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       await Promise.all(ids.map((id) => activityApi.deleteActivity(id)));
@@ -411,30 +445,32 @@ export default function Dashboard() {
 
   const handleMarkComplete = (id: string) => updateStatusMutation.mutate({ id, status: "completed" });
   const handleCancel = (id: string) => updateStatusMutation.mutate({ id, status: "cancelled" });
+  const handleApprove = (id: string) => updateApprovalMutation.mutate({ id, approvalStatus: "approved" });
+  const handleReject = (id: string) => updateApprovalMutation.mutate({ id, approvalStatus: "rejected" });
   const handleEdit = (activity: ActivityWithDetails) => {
     setEditingActivity(activity);
     setCreateModalOpen(true);
   };
 
-  const handleBulkComplete = () => {
+  const handleBulkApprove = () => {
     const ids = Array.from(selectedIds);
-    Promise.all(ids.map((id) => activityApi.updateActivityStatus(id, "completed"))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
+    Promise.all(ids.map((id) => activityApi.updateActivityApproval(id, "approved"))).then(() => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
-      toast({ title: "Успешно", description: `Завершено активностей: ${ids.length}` });
+      toast({ title: "Планы утверждены", description: `Утверждено планов: ${ids.length}` });
       setSelectedIds(new Set());
+    }).catch((error: Error) => {
+      toast({ title: "Ошибка согласования", description: error.message, variant: "destructive" });
     });
   };
 
-  const handleBulkCancel = () => {
+  const handleBulkReject = () => {
     const ids = Array.from(selectedIds);
-    Promise.all(ids.map((id) => activityApi.updateActivityStatus(id, "cancelled"))).then(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/user", user?.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activities/calendar/user", user?.id] });
+    Promise.all(ids.map((id) => activityApi.updateActivityApproval(id, "rejected"))).then(() => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities/all"] });
-      toast({ title: "Успешно", description: `Отменено активностей: ${ids.length}` });
+      toast({ title: "Планы отклонены", description: `Отклонено планов: ${ids.length}` });
       setSelectedIds(new Set());
+    }).catch((error: Error) => {
+      toast({ title: "Ошибка согласования", description: error.message, variant: "destructive" });
     });
   };
 
@@ -452,7 +488,7 @@ export default function Dashboard() {
   };
 
   const selectAll = () => {
-    const ids = filteredActivities.map((a) => a.id);
+    const ids = filteredActivities.filter((a) => a.status !== "completed").map((a) => a.id);
     setSelectedIds(new Set(ids));
   };
 
@@ -648,11 +684,11 @@ export default function Dashboard() {
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-xs text-muted-foreground">{selectedIds.size} выбрано</span>
-                <Button size="sm" variant="outline" onClick={handleBulkComplete}>
-                  <Check className="w-4 h-4 mr-1 text-green-600" /> Выполнить
+                <Button size="sm" variant="outline" onClick={handleBulkApprove}>
+                  <Check className="w-4 h-4 mr-1 text-green-600" /> Утвердить
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleBulkCancel}>
-                  <X className="w-4 h-4 mr-1 text-red-600" /> Отменить
+                <Button size="sm" variant="outline" onClick={handleBulkReject}>
+                  <X className="w-4 h-4 mr-1 text-red-600" /> Отклонить
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -683,7 +719,7 @@ export default function Dashboard() {
           </div>
 
           {filtersOpen && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 bg-muted rounded-lg">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-3 bg-muted rounded-lg">
               <Select value={managerFilter} onValueChange={setManagerFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Менеджер" />
@@ -705,6 +741,18 @@ export default function Dashboard() {
                 <SelectContent>
                   <SelectItem value="all">Все статусы</SelectItem>
                   {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                    <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={approvalFilter} onValueChange={setApprovalFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Согласование" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все решения</SelectItem>
+                  {Object.entries(APPROVAL_CONFIG).map(([key, cfg]) => (
                     <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -815,15 +863,20 @@ export default function Dashboard() {
                                 <Checkbox
                                   checked={selectedIds.has(activity.id)}
                                   onCheckedChange={() => toggleSelection(activity.id)}
+                                  disabled={activity.status === "completed"}
                                 />
                               </div>
                             )}
                             <div className="flex-1">
                               <ActivityCard
                                 activity={activity}
+                                currentUserId={user?.id}
+                                canReview={isPrivileged}
                                 onMarkComplete={handleMarkComplete}
                                 onEdit={handleEdit}
                                 onCancel={handleCancel}
+                                onApprove={handleApprove}
+                                onReject={handleReject}
                               />
                             </div>
                           </div>

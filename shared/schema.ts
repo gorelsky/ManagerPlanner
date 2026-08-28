@@ -23,6 +23,9 @@ export const ACTIVITY_STATUSES = [
 ] as const;
 export type ActivityStatus = (typeof ACTIVITY_STATUSES)[number];
 
+export const APPROVAL_STATUSES = ["created", "approved", "rejected"] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
 // Константа для ролей пользователей
 export const USER_ROLES = ["admin", "manager", "director"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -116,6 +119,12 @@ export const activities = pgTable(
     status: text("status").$type<ActivityStatus>()
       .notNull()
       .default("planned"),
+    approvalStatus: text("approval_status").$type<ApprovalStatus>()
+      .notNull()
+      .default("created"),
+    reviewedBy: varchar("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+    completedAt: timestamp("completed_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -127,6 +136,9 @@ export const activities = pgTable(
     startDateIdx: index("activities_start_date_idx").on(table.startDate),
     endDateIdx: index("activities_end_date_idx").on(table.endDate),
     statusIdx: index("activities_status_idx").on(table.status),
+    approvalStatusIdx: index("activities_approval_status_idx").on(
+      table.approvalStatus,
+    ),
   }),
 );
 
@@ -180,7 +192,8 @@ export const managerCities = pgTable(
 /* === Relations === */
 
 export const usersRelations = relations(users, ({ many, one }) => ({
-  activities: many(activities),
+  activities: many(activities, { relationName: "activityOwner" }),
+  reviewedActivities: many(activities, { relationName: "activityReviewer" }),
   employees: many(employees),
   sentMessages: many(messages, { relationName: "sender" }),
   receivedMessages: many(messages, { relationName: "receiver" }),
@@ -217,6 +230,12 @@ export const activitiesRelations = relations(activities, ({ one }) => ({
   user: one(users, {
     fields: [activities.userId],
     references: [users.id],
+    relationName: "activityOwner",
+  }),
+  reviewer: one(users, {
+    fields: [activities.reviewedBy],
+    references: [users.id],
+    relationName: "activityReviewer",
   }),
   type: one(activityTypes, {
     fields: [activities.typeId],
@@ -286,6 +305,10 @@ export const insertActivitySchema = createInsertSchema(activities, {
 })
   .omit({
     id: true,
+    approvalStatus: true,
+    reviewedBy: true,
+    reviewedAt: true,
+    completedAt: true,
     createdAt: true,
     updatedAt: true,
   })
