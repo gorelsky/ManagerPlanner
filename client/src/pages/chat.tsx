@@ -113,12 +113,12 @@ export default function Chat() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center pb-16">
-      {/* Карточка чата, ограниченная по высоте, чтобы поле ввода было видно */}
-      <div className="w-full max-w-sm bg-card flex flex-col h-[calc(98vh-5rem)]">
+    <div className="h-screen h-[100dvh] bg-background flex flex-col pb-16 overflow-hidden">
+      {/* Чат занимает всю доступную область экрана над нижней навигацией. */}
+      <div className="w-full flex-1 min-h-0 bg-card flex flex-col">
         {/* Header */}
         <div className="border-b border-border bg-blue-header text-white">
-          <div className="flex items-center justify-between p-4">
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-10">
             <div className="flex items-center space-x-3">
               <SideMenu />
               <div>
@@ -132,8 +132,8 @@ export default function Chat() {
         </div>
 
         {/* Messages: прокручиваются только внутри этой области */}
-        <ScrollArea className="flex-1 px-4">
-          <div className="space-y-4 py-4">
+        <ScrollArea className="flex-1 min-h-0 px-3 sm:px-6 lg:px-10">
+          <div className="space-y-4 py-4 w-full">
             {messages.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -167,7 +167,7 @@ export default function Chat() {
                       </Avatar>
                     )}
 
-                    <div className={`max-w-[80%] ${isOwnMessage ? "order-1" : ""}`}>
+                    <div className={`min-w-0 max-w-[85%] sm:max-w-[72%] lg:max-w-[60%] ${isOwnMessage ? "order-1" : ""}`}>
                       {!isOwnMessage && (
                         <div className="text-xs text-muted-foreground mb-1">
                           {message.sender.firstName} {message.sender.lastName}
@@ -191,7 +191,7 @@ export default function Chat() {
                             : "bg-muted text-foreground"
                         }`}
                       >
-                        <p className="text-sm whitespace-pre-wrap">
+                        <p className="text-sm whitespace-pre-wrap break-words">
                           {message.content}
                         </p>
                         <p
@@ -223,8 +223,8 @@ export default function Chat() {
         </ScrollArea>
 
         {/* Message Input: всегда видно, прямо над нижним краем карточки */}
-        <div className="p-4 border-t border-border bg-card">
-          <div className="flex items-end space-x-2">
+        <div className="px-3 py-3 sm:px-6 lg:px-10 border-t border-border bg-card">
+          <div className="flex items-end space-x-2 w-full">
             <div className="flex-1">
               <Input
                 placeholder="Напишите сообщение..."
@@ -246,7 +246,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Фиксированный навбар поверх фона, но отделён от карточки чата */}
+      {/* Фиксированный навбар расположен под рабочей областью чата. */}
       <BottomNavigation />
     </div>
   );
