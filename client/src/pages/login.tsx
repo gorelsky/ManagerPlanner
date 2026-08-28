@@ -7,32 +7,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.jpg";
-import { supabaseUrl, supabaseAnonKey } from "@/supabase";
-
-async function getSupabaseAccessToken(email: string, password: string) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 6000);
-
-  try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: {
-        apikey: supabaseAnonKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) return null;
-    const result = await response.json();
-    return typeof result.access_token === "string" ? result.access_token : null;
-  } catch {
-    return null;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -47,38 +21,18 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      let serverUser = null;
-
-      // Основной вход выполняется через сервер приложения. Это позволяет
-      // работать локально и не зависеть от доступности внешнего Auth API.
+      // Вход выполняется через сервер приложения и таблицу users.
       const localResponse = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
-      if (localResponse.ok) {
-        serverUser = await localResponse.json();
-      } else {
-        // Supabase остаётся резервным способом для учётных записей,
-        // пароль которых был изменён непосредственно в Supabase.
-        const accessToken = await getSupabaseAccessToken(username, password);
-        if (!accessToken) {
-          throw new Error("Неверный логин или пароль");
-        }
-
-        const res = await fetch("/api/auth/supabase", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ access_token: accessToken }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || "Ошибка создания сессии");
-        }
-        serverUser = await res.json();
+      if (!localResponse.ok) {
+        const error = await localResponse.json().catch(() => null);
+        throw new Error(error?.message || "Неверный логин или пароль");
       }
+      const serverUser = await localResponse.json();
 
       await login(serverUser);
 

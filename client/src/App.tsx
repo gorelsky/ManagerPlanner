@@ -13,6 +13,7 @@ import Chat from "@/pages/chat";
 import Admin from "@/pages/admin";
 import Reports from "@/pages/reports";
 import Instructions from "@/pages/instructions";
+import Profile from "@/pages/profile";
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/reports" component={Reports} />
       <Route path="/instructions" component={Instructions} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );

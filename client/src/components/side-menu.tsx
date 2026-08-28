@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, User, Shield, BookOpen } from "lucide-react";
+import { Menu, LogOut, User, Shield, BookOpen, KeyRound } from "lucide-react";
 import { Link } from "wouter";
 
 export default function SideMenu() {
@@ -90,6 +90,16 @@ export default function SideMenu() {
             >
               <BookOpen className="w-4 h-4 text-green-100" />
               <span className="text-sm font-medium">Инструкция по работе</span>
+            </div>
+          </Link>
+
+          <Link href="/profile" onClick={() => setOpen(false)}>
+            <div
+              className="px-4 py-3 rounded-xl border border-white/10 bg-white/10 hover:bg-white/20 transition-colors flex items-center space-x-2 cursor-pointer"
+              data-testid="link-profile"
+            >
+              <KeyRound className="w-4 h-4 text-yellow-100" />
+              <span className="text-sm font-medium">Личный кабинет и пароль</span>
             </div>
           </Link>
 

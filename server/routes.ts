@@ -132,10 +132,20 @@ const activityApprovalSchema = z.object({
   approvalStatus: z.enum(["approved", "rejected"]),
 });
 
-async function hashPassword(password: string): Promise<string> {
-  const saltRounds = 10;
-  return bcrypt.hash(password, saltRounds);
-}
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Введите текущий пароль").max(128),
+    newPassword: z
+      .string()
+      .min(10, "Новый пароль должен содержать минимум 10 символов")
+      .max(128, "Новый пароль слишком длинный")
+      .regex(/[A-Za-zА-Яа-яЁё]/, "Добавьте в новый пароль хотя бы одну букву")
+      .regex(/\d/, "Добавьте в новый пароль хотя бы одну цифру"),
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: "Новый пароль должен отличаться от текущего",
+    path: ["newPassword"],
+  });
 
 // ===================== Регистрация маршрутов =====================
 
@@ -190,81 +200,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Вход через Supabase (по токену)
-app.post("/api/auth/supabase", async (req, res) => {
-  try {
-    const { access_token } = req.body;
-    console.log("[Supabase login] Token received:", access_token ? "yes" : "no");
-    if (!access_token) {
-      return res.status(400).json({ message: "Токен не предоставлен" });
-    }
-
-    // Проверяем токен через Auth API
-    const response = await fetch(`${process.env.VITE_SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        apikey: process.env.VITE_SUPABASE_ANON_KEY!,
-      },
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("[Supabase login] Auth API error:", response.status, text);
-      return res.status(401).json({ message: "Неверный токен" });
-    }
-
-    const user = await response.json();
-    console.log("[Supabase login] User verified:", user.id, user.email);
-
-    // 1. Ищем по email (username)
-    let localUser = await storage.getUserByUsername(user.email);
-    // 2. Если не найден, ищем по id (на случай, если уже есть запись с таким id)
-    if (!localUser) {
-      localUser = await storage.getUser(user.id);
-    }
-    // 3. Если всё ещё не найден – создаём нового
-    if (!localUser) {
-      console.log("[Supabase login] Creating new local user for:", user.id);
-      localUser = await storage.createUser({
-        id: user.id,
-        username: user.email,
-        password: "",
-        firstName: user.user_metadata?.first_name || "",
-        lastName: user.user_metadata?.last_name || "",
-        middleName: user.user_metadata?.middle_name || "",
-        role: user.email?.toLowerCase() === "t.loginova@sls-pharma.ru"
-          ? "director"
-          : user.email?.toLowerCase() === "k.gadeliya@sls-pharma.ru"
-            ? "hr_director"
-            : "manager",
-        profileImage: user.user_metadata?.avatar_url || "",
-      });
-    } else {
-      console.log("[Supabase login] Local user found:", localUser.id);
-      // Если найден по username, но id отличается – можно обновить id (опционально)
-      // Но чтобы не трогать связанные данные, оставляем как есть
-      // Сессию будем создавать с localUser.id
-    }
-
-    // Устанавливаем сессию
-    req.session.userId = localUser.id;
-    req.session.save((err) => {
-      if (err) {
-        console.error("[Supabase login] Session save error:", err);
-        return res.status(500).json({ message: "Ошибка сохранения сессии" });
-      }
-      console.log("[Supabase login] Session saved for user:", localUser.id);
-      const { password: _, ...userWithoutPassword } = localUser;
-      res.json(userWithoutPassword);
-    });
-  } catch (error) {
-    console.error("[Supabase login] Error:", error);
-    res.status(500).json({ message: "Внутренняя ошибка сервера" });
-  }
-});
-
   // ----- Все остальные маршруты требуют аутентификации -----
   app.use("/api", authenticate);
+
+  app.post("/api/auth/change-password", async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+      const user = await storage.getUser(req.user!.id);
+
+      if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+        return res.status(400).json({ message: "Текущий пароль указан неверно" });
+      }
+
+      await storage.updateUserPassword(user.id, newPassword);
+      res.json({ message: "Пароль успешно изменён" });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: error.errors[0]?.message || "Проверьте новый пароль" });
+      }
+      console.error("Change password error:", error);
+      res.status(500).json({ message: "Не удалось изменить пароль" });
+    }
+  });
 
   // ----- Маршруты для администраторов -----
   app.post("/api/employees/import", requireAdmin, async (req, res) => {
@@ -356,12 +313,9 @@ app.post("/api/auth/supabase", async (req, res) => {
   app.post("/api/users", requireAdmin, async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
-      const hashedPassword = await hashPassword(userData.password);
-      const user = await storage.createUser({
-        ...userData,
-        password: hashedPassword,
-      });
-      res.status(201).json(user);
+      const user = await storage.createUser(userData);
+      const { password: _, ...publicUser } = user;
+      res.status(201).json(publicUser);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid user data", errors: error.errors });
@@ -375,7 +329,7 @@ app.post("/api/auth/supabase", async (req, res) => {
   app.get("/api/users/managers", requireManagerOrAdmin, async (_req, res) => {
     try {
       const managers = await storage.getManagersList();
-      res.json(managers);
+      res.json(managers.map(({ password: _, ...manager }) => manager));
     } catch (error) {
       console.error("Get managers error:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -388,7 +342,8 @@ app.post("/api/auth/supabase", async (req, res) => {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      res.json(user);
+      const { password: _, ...publicUser } = user;
+      res.json(publicUser);
     } catch (error) {
       console.error("Get user error:", error);
       res.status(500).json({ message: "Internal server error" });
