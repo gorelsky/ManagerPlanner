@@ -58,7 +58,8 @@ export default function BottomNavigation() {
       testId: "nav-chat",
     });
   } else {
-    // Остальные: Внесение, МП, Аналитика, Чат (+ Админ, + Отчёты для админа)
+    // Менеджер и администратор: Внесение, Аналитика, Чат.
+    // Персональный список МП доступен только менеджеру.
     navItems.push({
       path: "/",
       icon: PenTool,
@@ -66,12 +67,14 @@ export default function BottomNavigation() {
       testId: "nav-entry",
     });
 
-    navItems.push({
-      path: "/reps",
-      icon: Users,
-      label: "МП",
-      testId: "nav-reps",
-    });
+    if (user?.role === "manager") {
+      navItems.push({
+        path: "/reps",
+        icon: Users,
+        label: "МП",
+        testId: "nav-reps",
+      });
+    }
 
     navItems.push({
       path: "/analytics",
