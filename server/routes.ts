@@ -132,6 +132,11 @@ const activityApprovalSchema = z.object({
   approvalStatus: z.enum(["approved", "rejected"]),
 });
 
+const loginSchema = z.object({
+  username: z.string().trim().min(1).max(254),
+  password: z.string().min(1).max(128),
+});
+
 const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Введите текущий пароль").max(128),
@@ -165,10 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Логин по локальной БД (оставлен для обратной совместимости)
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { username, password } = req.body;
-      if (!username || !password) {
-        return res.status(400).json({ message: "Логин и пароль обязательны" });
-      }
+      const { username, password } = loginSchema.parse(req.body);
 
       const user = await storage.getUserByUsername(username);
       if (!user) {
@@ -180,10 +182,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Неверный логин или пароль" });
       }
 
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((error) => (error ? reject(error) : resolve()));
+      });
       req.session.userId = user.id;
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Логин и пароль обязательны" });
+      }
       console.error("Login error:", error);
       res.status(500).json({ message: "Внутренняя ошибка сервера" });
     }
@@ -196,6 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Logout error:", err);
         return res.status(500).json({ message: "Ошибка выхода" });
       }
+      res.clearCookie("connect.sid");
       res.json({ message: "Выход выполнен" });
     });
   });

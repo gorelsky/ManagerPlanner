@@ -4,18 +4,32 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { pool } from "./db"; // импортируем pool из db.ts
+import { pool } from "./db";
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const sessionSecret = process.env.SESSION_SECRET;
 
-if (isProduction && !sessionSecret) {
-  throw new Error("SESSION_SECRET must be set in production");
+if (isProduction && (!sessionSecret || sessionSecret.length < 32)) {
+  throw new Error("SESSION_SECRET must contain at least 32 characters in production");
 }
 
 // Railway terminates HTTPS at its proxy. Trust it so secure cookies work.
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+});
 
 // Ограничиваем размер входящих данных
 app.use(express.json({ limit: "1mb" }));
@@ -42,31 +56,15 @@ app.use(
   })
 );
 
-// Логирование (без изменений)
+// Log request metadata only. Response bodies may contain personal data.
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
+      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });
 
@@ -74,6 +72,7 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   res.status(200).json({
     status: "ok",
     uptime: Math.round(process.uptime()),
@@ -83,10 +82,12 @@ app.get("/health", (_req, res) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  // Глобальный обработчик ошибок – теперь без throw err
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message =
+      isProduction && status >= 500
+        ? "Внутренняя ошибка сервера"
+        : err.message || "Internal Server Error";
 
     console.error("Global error handler:", err);
     res.status(status).json({ message });
