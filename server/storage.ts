@@ -7,6 +7,7 @@ import {
   messages,
   managerCities,
   holidays,
+  userLoginSessions,
   type User,
   type InsertUser,
   type City,
@@ -27,6 +28,7 @@ import {
   type ManagerCityWithDetails,
   type Holiday,
   type InsertHoliday,
+  type UserLoginSession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
@@ -41,6 +43,12 @@ export interface IStorage {
   updateUserPassword(id: string, password: string): Promise<void>;
   getManagersList(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
+
+  // Login audit
+  createLoginSession(user: User): Promise<UserLoginSession>;
+  touchLoginSession(id: string): Promise<void>;
+  endLoginSession(id: string): Promise<void>;
+  getLoginSessions(limit?: number): Promise<UserLoginSession[]>;
 
   // Cities
   getCities(): Promise<City[]>;
@@ -153,6 +161,52 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  /* === Login audit === */
+
+  async createLoginSession(user: User): Promise<UserLoginSession> {
+    const fullName = [user.lastName, user.firstName, user.middleName]
+      .filter(Boolean)
+      .join(" ");
+    const [loginSession] = await db
+      .insert(userLoginSessions)
+      .values({
+        userId: user.id,
+        username: user.username,
+        fullName,
+      })
+      .returning();
+    return loginSession;
+  }
+
+  async touchLoginSession(id: string): Promise<void> {
+    await db
+      .update(userLoginSessions)
+      .set({
+        lastActivityAt: sql`NOW()`,
+        durationSeconds: sql`GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ${userLoginSessions.loginAt}))::integer)`,
+      })
+      .where(and(eq(userLoginSessions.id, id), isNull(userLoginSessions.logoutAt)));
+  }
+
+  async endLoginSession(id: string): Promise<void> {
+    await db
+      .update(userLoginSessions)
+      .set({
+        lastActivityAt: sql`NOW()`,
+        logoutAt: sql`NOW()`,
+        durationSeconds: sql`GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ${userLoginSessions.loginAt}))::integer)`,
+      })
+      .where(and(eq(userLoginSessions.id, id), isNull(userLoginSessions.logoutAt)));
+  }
+
+  async getLoginSessions(limit = 200): Promise<UserLoginSession[]> {
+    return db
+      .select()
+      .from(userLoginSessions)
+      .orderBy(desc(userLoginSessions.loginAt))
+      .limit(limit);
   }
 
   /* === Cities === */

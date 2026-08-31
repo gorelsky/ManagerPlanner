@@ -35,6 +35,8 @@ declare global {
 declare module "express-session" {
   interface SessionData {
     userId: string;
+    loginSessionId?: string;
+    lastActivityTrackedAt?: number;
   }
 }
 
@@ -57,6 +59,20 @@ async function authenticate(req: Request, res: Response, next: NextFunction) {
       role: user.role || "user",
       username: user.username,
     };
+
+    const now = Date.now();
+    if (
+      req.session.loginSessionId &&
+      (!req.session.lastActivityTrackedAt ||
+        now - req.session.lastActivityTrackedAt >= 60_000)
+    ) {
+      try {
+        await storage.touchLoginSession(req.session.loginSessionId);
+        req.session.lastActivityTrackedAt = now;
+      } catch (error) {
+        console.error("Login session activity tracking error:", error);
+      }
+    }
     next();
   } catch (error) {
     console.error("Authentication error:", error);
@@ -185,7 +201,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await new Promise<void>((resolve, reject) => {
         req.session.regenerate((error) => (error ? reject(error) : resolve()));
       });
+      const loginSession = await storage.createLoginSession(user);
       req.session.userId = user.id;
+      req.session.loginSessionId = loginSession.id;
+      req.session.lastActivityTrackedAt = Date.now();
       const { password: _, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error) {
@@ -198,7 +217,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Выход
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
+    const loginSessionId = req.session.loginSessionId;
+    if (loginSessionId) {
+      try {
+        await storage.endLoginSession(loginSessionId);
+      } catch (error) {
+        console.error("Login session completion error:", error);
+      }
+    }
+
     req.session.destroy((err) => {
       if (err) {
         console.error("Logout error:", err);
@@ -229,6 +257,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Change password error:", error);
       res.status(500).json({ message: "Не удалось изменить пароль" });
+    }
+  });
+
+  app.get("/api/login-sessions", requireSystemAdmin, async (req, res) => {
+    try {
+      const requestedLimit = Number(req.query.limit ?? 200);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 500)
+        : 200;
+      const loginSessions = await storage.getLoginSessions(limit);
+      res.json(loginSessions);
+    } catch (error) {
+      console.error("Get login sessions error:", error);
+      res.status(500).json({ message: "Не удалось загрузить журнал входов" });
     }
   });
 

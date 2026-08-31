@@ -21,6 +21,23 @@ export async function runDatabaseMigrations(): Promise<void> {
     ALTER TABLE employees
       ADD COLUMN IF NOT EXISTS is_on_maternity_leave boolean NOT NULL DEFAULT false;
 
+    CREATE TABLE IF NOT EXISTS user_login_sessions (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id varchar REFERENCES users(id) ON DELETE SET NULL,
+      username text NOT NULL,
+      full_name text NOT NULL,
+      login_at timestamptz NOT NULL DEFAULT NOW(),
+      last_activity_at timestamptz NOT NULL DEFAULT NOW(),
+      logout_at timestamptz,
+      duration_seconds integer NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS user_login_sessions_user_idx
+      ON user_login_sessions (user_id);
+
+    CREATE INDEX IF NOT EXISTS user_login_sessions_login_at_idx
+      ON user_login_sessions (login_at DESC);
+
   `);
 
   console.log("Database migrations applied");

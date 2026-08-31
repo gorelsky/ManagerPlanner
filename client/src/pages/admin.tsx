@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays } from "lucide-react";
+import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,8 +31,9 @@ import {
   activityApi,
   cityApi,
   holidaysApi,
+  loginSessionsApi,
 } from "@/lib/api";
-import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails } from "@shared/schema";
+import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails, UserLoginSession } from "@shared/schema";
 
 type DayBucket = {
   date: Date;
@@ -56,6 +57,32 @@ function getDatesInRange(start: Date, end: Date): Date[] {
   }
 
   return dates;
+}
+
+function formatSessionDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, totalSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) return `${hours} ч ${minutes} мин`;
+  if (minutes > 0) return `${minutes} мин ${remainingSeconds} сек`;
+  return `${remainingSeconds} сек`;
+}
+
+function formatLoginDate(value: Date | string): string {
+  return new Date(value).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function isRecentlyActive(value: Date | string): boolean {
+  return Date.now() - new Date(value).getTime() <= 2 * 60 * 1000;
 }
 
 export default function Admin() {
@@ -247,6 +274,13 @@ export default function Admin() {
   const { data: allHolidays = [], isLoading: holidaysLoading } = useQuery<Holiday[]>({
     queryKey: ["/api/holidays/all"],
     queryFn: () => holidaysApi.getAllHolidays(),
+  });
+
+  const { data: loginSessions = [], isLoading: loginSessionsLoading } = useQuery<UserLoginSession[]>({
+    queryKey: ["/api/login-sessions"],
+    queryFn: () => loginSessionsApi.getLoginSessions(),
+    enabled: user?.role === "admin",
+    refetchInterval: 60_000,
   });
 
   const deleteEmployeeMutation = useMutation({
@@ -917,7 +951,68 @@ export default function Admin() {
             )}
           </CardContent>
         </Card>
-        
+
+        {user?.role === "admin" && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2">
+                  <LogIn className="h-5 w-5 text-primary" />
+                  Журнал входов пользователей
+                </span>
+                <Badge variant="secondary">{loginSessions.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loginSessionsLoading ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">Загрузка...</p>
+              ) : loginSessions.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Входы пока не зафиксированы
+                </p>
+              ) : (
+                <div className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+                  {loginSessions.map((loginSession) => (
+                    <div
+                      key={loginSession.id}
+                      className="grid gap-2 rounded-xl border bg-card p-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{loginSession.fullName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{loginSession.username}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Вход</p>
+                        <p className="text-sm">{formatLoginDate(loginSession.loginAt)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">
+                          {loginSession.logoutAt ? "Выход" : "Последняя активность"}
+                        </p>
+                        <p className="text-sm">
+                          {formatLoginDate(loginSession.logoutAt || loginSession.lastActivityAt)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 md:justify-end">
+                        <Clock3 className="h-4 w-4 text-muted-foreground" />
+                        <span className="whitespace-nowrap text-sm font-medium">
+                          {formatSessionDuration(loginSession.durationSeconds)}
+                        </span>
+                        {!loginSession.logoutAt &&
+                          (isRecentlyActive(loginSession.lastActivityAt) ? (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-600">Активна</Badge>
+                          ) : (
+                            <Badge variant="outline">Без выхода</Badge>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="mb-4 flex border-b">
           <button
             type="button"

@@ -54,6 +54,28 @@ export const users = pgTable(
   }),
 );
 
+export const userLoginSessions = pgTable(
+  "user_login_sessions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: varchar("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    username: text("username").notNull(),
+    fullName: text("full_name").notNull(),
+    loginAt: timestamp("login_at", { withTimezone: true }).notNull().defaultNow(),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    logoutAt: timestamp("logout_at", { withTimezone: true }),
+    durationSeconds: integer("duration_seconds").notNull().default(0),
+  },
+  (table) => ({
+    userIdx: index("user_login_sessions_user_idx").on(table.userId),
+    loginAtIdx: index("user_login_sessions_login_at_idx").on(table.loginAt),
+  }),
+);
+
 export const cities = pgTable(
   "cities",
   {
@@ -203,7 +225,18 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     references: [cities.id],
   }),
   managerCities: many(managerCities),
+  loginSessions: many(userLoginSessions),
 }));
+
+export const userLoginSessionsRelations = relations(
+  userLoginSessions,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userLoginSessions.userId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const citiesRelations = relations(cities, ({ many }) => ({
   activities: many(activities),
@@ -351,6 +384,7 @@ export const insertManagerCitySchema = createInsertSchema(managerCities).omit({
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type PublicUser = Omit<User, "password">;
+export type UserLoginSession = typeof userLoginSessions.$inferSelect;
 
 export type City = typeof cities.$inferSelect;
 export type InsertCity = z.infer<typeof insertCitySchema>;
