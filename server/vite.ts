@@ -69,6 +69,7 @@ export async function setupVite(app: Express, server: Server) {
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(import.meta.dirname, "public");
+  const assetsPath = path.resolve(distPath, "assets");
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
@@ -76,10 +77,34 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Production bundles may be requested from the Railway domain while the
+  // application itself is opened on sls-planner.ru. Only immutable frontend
+  // assets are public cross-origin; API responses and sessions are unaffected.
+  app.use(
+    "/assets",
+    express.static(assetsPath, {
+      immutable: true,
+      maxAge: "1y",
+      setHeaders(res) {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      },
+    }),
+  );
+
+  app.use(
+    express.static(distPath, {
+      index: false,
+      setHeaders(res) {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      },
+    }),
+  );
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
