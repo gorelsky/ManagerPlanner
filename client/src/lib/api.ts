@@ -1,6 +1,7 @@
 import { apiRequest } from "./queryClient";
 import type {
   PublicUser,
+  AuthenticatedUser,
   InsertUser,
   City,
   InsertCity,
@@ -46,6 +47,15 @@ export const userApi = {
 
   getManagersList: (): Promise<PublicUser[]> =>
     apiRequest("GET", "/api/users/managers").then((res) => res.json()),
+
+  getTestableUsers: (): Promise<PublicUser[]> =>
+    apiRequest("GET", "/api/users/testable").then((res) => res.json()),
+
+  startTestLogin: (userId: string): Promise<AuthenticatedUser> =>
+    apiRequest("POST", `/api/auth/impersonate/${userId}`).then((res) => res.json()),
+
+  stopTestLogin: (): Promise<AuthenticatedUser> =>
+    apiRequest("POST", "/api/auth/impersonation/stop").then((res) => res.json()),
 
   importUsers: (
     csvData: string,

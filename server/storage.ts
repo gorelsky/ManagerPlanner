@@ -42,10 +42,14 @@ export interface IStorage {
   createUser(user: InsertUser & { id?: string }): Promise<User>;
   updateUserPassword(id: string, password: string, mustChangePassword?: boolean): Promise<void>;
   getManagersList(): Promise<User[]>;
+  getTestableUsersList(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
 
   // Login audit
-  createLoginSession(user: User): Promise<UserLoginSession>;
+  createLoginSession(
+    user: User,
+    options?: { isTestSession?: boolean; initiatedByUsername?: string },
+  ): Promise<UserLoginSession>;
   touchLoginSession(id: string): Promise<void>;
   endLoginSession(id: string): Promise<void>;
   getLoginSessions(limit?: number): Promise<UserLoginSession[]>;
@@ -170,9 +174,20 @@ export class DatabaseStorage implements IStorage {
     await db.delete(users).where(eq(users.id, id));
   }
 
+  async getTestableUsersList(): Promise<User[]> {
+    return db
+      .select()
+      .from(users)
+      .where(sql`${users.role} <> 'admin'`)
+      .orderBy(asc(users.lastName), asc(users.firstName), asc(users.username));
+  }
+
   /* === Login audit === */
 
-  async createLoginSession(user: User): Promise<UserLoginSession> {
+  async createLoginSession(
+    user: User,
+    options: { isTestSession?: boolean; initiatedByUsername?: string } = {},
+  ): Promise<UserLoginSession> {
     const fullName = [user.lastName, user.firstName, user.middleName]
       .filter(Boolean)
       .join(" ");
@@ -182,6 +197,8 @@ export class DatabaseStorage implements IStorage {
         userId: user.id,
         username: user.username,
         fullName,
+        isTestSession: options.isTestSession ?? false,
+        initiatedByUsername: options.initiatedByUsername,
       })
       .returning();
     return loginSession;

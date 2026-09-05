@@ -41,6 +41,10 @@ export async function runDatabaseMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS user_login_sessions_login_at_idx
       ON user_login_sessions (login_at DESC);
 
+    ALTER TABLE user_login_sessions
+      ADD COLUMN IF NOT EXISTS is_test_session boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS initiated_by_username text;
+
   `);
 
   console.log("Database migrations applied");

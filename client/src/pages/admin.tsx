@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3 } from "lucide-react";
+import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3, TestTube2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,7 @@ import {
   holidaysApi,
   loginSessionsApi,
 } from "@/lib/api";
-import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails, UserLoginSession } from "@shared/schema";
+import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails, UserLoginSession, UserRole } from "@shared/schema";
 
 type DayBucket = {
   date: Date;
@@ -83,6 +83,13 @@ function formatLoginDate(value: Date | string): string {
 
 function isRecentlyActive(value: Date | string): boolean {
   return Date.now() - new Date(value).getTime() <= 2 * 60 * 1000;
+}
+
+function formatRole(role: UserRole): string {
+  if (role === "director") return "Директор по продажам";
+  if (role === "hr_director") return "HR-директор";
+  if (role === "manager") return "Менеджер";
+  return "Администратор";
 }
 
 export default function Admin() {
@@ -138,6 +145,12 @@ export default function Admin() {
   const { data: allManagers = [], isLoading: managersLoading } = useQuery({
     queryKey: ["/api/users/managers"],
     queryFn: () => userApi.getManagersList(),
+  });
+
+  const { data: testableUsers = [], isLoading: testableUsersLoading } = useQuery({
+    queryKey: ["/api/users/testable"],
+    queryFn: () => userApi.getTestableUsers(),
+    enabled: user?.role === "admin" && !user.isImpersonating,
   });
 
   const {
@@ -256,6 +269,21 @@ export default function Admin() {
       toast({
         title: "Ошибка удаления менеджера",
         description: error.message || "Не удалось удалить менеджера",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testLoginMutation = useMutation({
+    mutationFn: (userId: string) => userApi.startTestLogin(userId),
+    onSuccess: () => {
+      queryClient.clear();
+      window.location.assign("/");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Тестовый вход не выполнен",
+        description: error.message || "Не удалось переключиться на пользователя",
         variant: "destructive",
       });
     },
@@ -897,6 +925,78 @@ export default function Admin() {
           </Card>
         </div>
 
+        {user?.role === "admin" && (
+          <Card className="mb-6 border-sky-200 bg-sky-50/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TestTube2 className="h-5 w-5 text-sky-700" />
+                Тестовый вход под пользователем
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Позволяет проверить интерфейс и права выбранного пользователя без знания его пароля.
+                Тестовый вход будет отдельно отмечен в журнале. Любые созданные или изменённые
+                данные сохраняются в общей базе.
+              </p>
+              {testableUsersLoading ? (
+                <div className="py-4 text-center">Загрузка...</div>
+              ) : testableUsers.length === 0 ? (
+                <div className="py-4 text-center text-muted-foreground">
+                  Пользователи для проверки не найдены
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {testableUsers.map((testUser) => (
+                    <div
+                      key={testUser.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border bg-background p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
+                          {testUser.lastName} {testUser.firstName} {testUser.middleName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {formatRole(testUser.role)} · {testUser.username}
+                        </p>
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={testLoginMutation.isPending}
+                          >
+                            <LogIn className="mr-2 h-4 w-4" />
+                            Войти
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Начать тестовый вход?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Вы увидите приложение с правами пользователя {testUser.lastName}{" "}
+                              {testUser.firstName}. Действия могут изменить реальные данные. Вернуться
+                              в кабинет администратора можно через боковое меню.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Отмена</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => testLoginMutation.mutate(testUser.id)}>
+                              Войти для проверки
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Менеджеры</CardTitle>
@@ -978,8 +1078,18 @@ export default function Admin() {
                       className="grid gap-2 rounded-xl border bg-card p-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-center"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{loginSession.fullName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium">{loginSession.fullName}</p>
+                          {loginSession.isTestSession && (
+                            <Badge className="bg-sky-600 hover:bg-sky-600">Тестовый вход</Badge>
+                          )}
+                        </div>
                         <p className="truncate text-xs text-muted-foreground">{loginSession.username}</p>
+                        {loginSession.isTestSession && loginSession.initiatedByUsername && (
+                          <p className="truncate text-xs text-sky-700">
+                            Администратор: {loginSession.initiatedByUsername}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Вход</p>

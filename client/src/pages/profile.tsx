@@ -64,7 +64,14 @@ export default function Profile() {
       </header>
 
       <main className="mx-auto w-full max-w-2xl p-4 space-y-4">
-        {user?.mustChangePassword && (
+        {user?.isImpersonating && (
+          <Card className="border-sky-300 bg-sky-50 text-sky-950">
+            <CardContent className="pt-6 text-sm">
+              Вы находитесь в режиме тестового входа. Смена пароля пользователя в этом режиме отключена.
+            </CardContent>
+          </Card>
+        )}
+        {user?.mustChangePassword && !user.isImpersonating && (
           <Card className="border-amber-300 bg-amber-50 text-amber-950">
             <CardContent className="flex gap-3 pt-6">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
@@ -88,7 +95,7 @@ export default function Profile() {
           </CardHeader>
         </Card>
 
-        <Card>
+        {!user?.isImpersonating && <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-primary" />
@@ -152,7 +159,7 @@ export default function Profile() {
               </Button>
             </form>
           </CardContent>
-        </Card>
+        </Card>}
       </main>
 
       <BottomNavigation />

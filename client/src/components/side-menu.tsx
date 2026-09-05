@@ -2,18 +2,40 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, LogOut, User, Shield, BookOpen, KeyRound } from "lucide-react";
+import { Menu, LogOut, User, Shield, BookOpen, KeyRound, Undo2 } from "lucide-react";
 import { Link } from "wouter";
+import { userApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SideMenu() {
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { toast } = useToast();
+  const [isReturning, setIsReturning] = useState(false);
 
   if (!user) return null;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setOpen(false);
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => undefined);
     logout();
+    window.location.assign("/");
+  };
+
+  const handleStopTestLogin = async () => {
+    setIsReturning(true);
+    try {
+      await userApi.stopTestLogin();
+      window.location.assign("/");
+    } catch (error) {
+      toast({
+        title: "Не удалось вернуться",
+        description: error instanceof Error ? error.message : "Повторите попытку",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReturning(false);
+    }
   };
 
   const roleLabel =
@@ -75,6 +97,25 @@ export default function SideMenu() {
             <p className="text-xs text-white/60">Логин</p>
             <p className="text-sm font-medium">@{user.username}</p>
           </div>
+
+          {user.isImpersonating && (
+            <div className="rounded-xl border border-amber-200/40 bg-amber-300/20 p-4">
+              <p className="text-sm font-semibold text-amber-50">Тестовый вход администратора</p>
+              <p className="mt-1 text-xs text-amber-50/80">
+                Сейчас отображается приложение с правами этого пользователя.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 w-full border-white/30 bg-white/10 text-white hover:bg-white/25 hover:text-white"
+                onClick={handleStopTestLogin}
+                disabled={isReturning}
+              >
+                <Undo2 className="mr-2 h-4 w-4" />
+                {isReturning ? "Возвращаемся..." : "Вернуться администратором"}
+              </Button>
+            </div>
+          )}
 
           {user.role === "admin" && (
             <div className="px-4 py-3 rounded-xl border border-white/10 bg-white/10 flex items-center space-x-2">

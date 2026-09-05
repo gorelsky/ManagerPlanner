@@ -38,6 +38,7 @@ declare module "express-session" {
     userId: string;
     loginSessionId?: string;
     lastActivityTrackedAt?: number;
+    impersonatorUserId?: string;
   }
 }
 
@@ -192,7 +193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.loginSessionId = loginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
       const { password: _, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
+      res.json({ ...userWithoutPassword, isImpersonating: false });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Логин и пароль обязательны" });
@@ -232,11 +233,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Пользователь не найден" });
     }
     const { password: _, ...publicUser } = user;
-    res.json(publicUser);
+    res.json({
+      ...publicUser,
+      isImpersonating: Boolean(req.session.impersonatorUserId),
+    });
+  });
+
+  app.post("/api/auth/impersonate/:userId", requireSystemAdmin, async (req, res) => {
+    try {
+      const administrator = await storage.getUser(req.user!.id);
+      const targetUser = await storage.getUser(req.params.userId);
+
+      if (!administrator || administrator.role !== "admin") {
+        return res.status(403).json({ message: "Действие доступно только администратору" });
+      }
+      if (!targetUser || targetUser.role === "admin") {
+        return res.status(404).json({ message: "Пользователь для тестового входа не найден" });
+      }
+
+      if (req.session.loginSessionId) {
+        await storage.endLoginSession(req.session.loginSessionId);
+      }
+      const testLoginSession = await storage.createLoginSession(targetUser, {
+        isTestSession: true,
+        initiatedByUsername: administrator.username,
+      });
+
+      req.session.impersonatorUserId = administrator.id;
+      req.session.userId = targetUser.id;
+      req.session.loginSessionId = testLoginSession.id;
+      req.session.lastActivityTrackedAt = Date.now();
+
+      const { password: _, ...publicUser } = targetUser;
+      res.json({ ...publicUser, isImpersonating: true });
+    } catch (error) {
+      console.error("Impersonation start error:", error);
+      res.status(500).json({ message: "Не удалось выполнить тестовый вход" });
+    }
+  });
+
+  app.post("/api/auth/impersonation/stop", async (req, res) => {
+    try {
+      const administratorId = req.session.impersonatorUserId;
+      if (!administratorId) {
+        return res.status(400).json({ message: "Тестовый вход не активен" });
+      }
+
+      const administrator = await storage.getUser(administratorId);
+      if (!administrator || administrator.role !== "admin") {
+        return res.status(403).json({ message: "Учётная запись администратора недоступна" });
+      }
+
+      if (req.session.loginSessionId) {
+        await storage.endLoginSession(req.session.loginSessionId);
+      }
+      const administratorLoginSession = await storage.createLoginSession(administrator);
+
+      req.session.userId = administrator.id;
+      req.session.loginSessionId = administratorLoginSession.id;
+      req.session.lastActivityTrackedAt = Date.now();
+      delete req.session.impersonatorUserId;
+
+      const { password: _, ...publicUser } = administrator;
+      res.json({ ...publicUser, isImpersonating: false });
+    } catch (error) {
+      console.error("Impersonation stop error:", error);
+      res.status(500).json({ message: "Не удалось вернуться в кабинет администратора" });
+    }
   });
 
   app.post("/api/auth/change-password", async (req, res) => {
     try {
+      if (req.session.impersonatorUserId) {
+        return res.status(403).json({
+          message: "Смена пароля недоступна во время тестового входа",
+        });
+      }
       const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
       const user = await storage.getUser(req.user!.id);
 
@@ -379,6 +451,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get managers error:", error);
       res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/users/testable", requireSystemAdmin, async (_req, res) => {
+    try {
+      const testableUsers = await storage.getTestableUsersList();
+      res.json(testableUsers.map(({ password: _, ...testableUser }) => testableUser));
+    } catch (error) {
+      console.error("Get testable users error:", error);
+      res.status(500).json({ message: "Не удалось загрузить пользователей" });
     }
   });
 

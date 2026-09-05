@@ -70,6 +70,8 @@ export const userLoginSessions = pgTable(
       .defaultNow(),
     logoutAt: timestamp("logout_at", { withTimezone: true }),
     durationSeconds: integer("duration_seconds").notNull().default(0),
+    isTestSession: boolean("is_test_session").notNull().default(false),
+    initiatedByUsername: text("initiated_by_username"),
   },
   (table) => ({
     userIdx: index("user_login_sessions_user_idx").on(table.userId),
@@ -386,6 +388,9 @@ export const insertManagerCitySchema = createInsertSchema(managerCities).omit({
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type PublicUser = Omit<User, "password">;
+export type AuthenticatedUser = PublicUser & {
+  isImpersonating: boolean;
+};
 export type UserLoginSession = typeof userLoginSessions.$inferSelect;
 
 export type City = typeof cities.$inferSelect;

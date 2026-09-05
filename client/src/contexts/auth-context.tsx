@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import type { PublicUser } from "@shared/schema";
+import type { AuthenticatedUser } from "@shared/schema";
 
 interface AuthContextType {
-  user: PublicUser | null;
-  login: (user: PublicUser) => void;
+  user: AuthenticatedUser | null;
+  login: (user: AuthenticatedUser) => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -23,7 +23,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<PublicUser | null>(null);
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!response.ok) {
           throw new Error("Session is not active");
         }
-        const currentUser = (await response.json()) as PublicUser;
+        const currentUser = (await response.json()) as AuthenticatedUser;
         if (!cancelled) {
           setUser(currentUser);
           localStorage.setItem("user", JSON.stringify(currentUser));
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const login = (newUser: PublicUser) => {
+  const login = (newUser: AuthenticatedUser) => {
     setUser(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
   };

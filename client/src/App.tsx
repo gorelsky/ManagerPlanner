@@ -46,7 +46,7 @@ function Router() {
     return <Login />;
   }
 
-  if (user.mustChangePassword && location !== "/profile") {
+  if (user.mustChangePassword && !user.isImpersonating && location !== "/profile") {
     return <Redirect to="/profile" />;
   }
 
