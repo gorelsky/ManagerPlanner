@@ -29,6 +29,7 @@ function ScrollToTop() {
 
 function Router() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -43,6 +44,10 @@ function Router() {
 
   if (!user) {
     return <Login />;
+  }
+
+  if (user.mustChangePassword && location !== "/profile") {
+    return <Redirect to="/profile" />;
   }
 
   const RepresentativesRoute = () =>

@@ -17,6 +17,7 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import bcrypt from "bcrypt";
+import { changePasswordSchema } from "./passwords";
 
 // ===================== Типы и расширения =====================
 
@@ -153,21 +154,6 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
-const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "Введите текущий пароль").max(128),
-    newPassword: z
-      .string()
-      .min(10, "Новый пароль должен содержать минимум 10 символов")
-      .max(128, "Новый пароль слишком длинный")
-      .regex(/[A-Za-zА-Яа-яЁё]/, "Добавьте в новый пароль хотя бы одну букву")
-      .regex(/\d/, "Добавьте в новый пароль хотя бы одну цифру"),
-  })
-  .refine((data) => data.currentPassword !== data.newPassword, {
-    message: "Новый пароль должен отличаться от текущего",
-    path: ["newPassword"],
-  });
-
 // ===================== Регистрация маршрутов =====================
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -240,6 +226,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ----- Все остальные маршруты требуют аутентификации -----
   app.use("/api", authenticate);
 
+  app.get("/api/auth/me", async (req, res) => {
+    const user = await storage.getUser(req.user!.id);
+    if (!user) {
+      return res.status(404).json({ message: "Пользователь не найден" });
+    }
+    const { password: _, ...publicUser } = user;
+    res.json(publicUser);
+  });
+
   app.post("/api/auth/change-password", async (req, res) => {
     try {
       const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
@@ -249,7 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Текущий пароль указан неверно" });
       }
 
-      await storage.updateUserPassword(user.id, newPassword);
+      await storage.updateUserPassword(user.id, newPassword, false);
       res.json({ message: "Пароль успешно изменён" });
     } catch (error) {
       if (error instanceof z.ZodError) {

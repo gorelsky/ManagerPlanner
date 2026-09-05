@@ -60,7 +60,7 @@ import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi, holidaysApi, userApi } from "@/lib/api";
-import type { ActivityStatus, ActivityWithDetails, ApprovalStatus, User } from "@shared/schema";
+import type { ActivityStatus, ActivityWithDetails, ApprovalStatus, PublicUser } from "@shared/schema";
 import {
   PieChart,
   Pie,
@@ -105,7 +105,7 @@ const APPROVAL_CONFIG: Record<ApprovalStatus, { label: string }> = {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatManagerName(u: User) {
+function formatManagerName(u: PublicUser) {
   const full = `${u.lastName || ""} ${u.firstName || ""} ${u.middleName || ""}`.trim();
   return full || u.username;
 }

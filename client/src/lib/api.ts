@@ -1,6 +1,6 @@
 import { apiRequest } from "./queryClient";
 import type {
-  User,
+  PublicUser,
   InsertUser,
   City,
   InsertCity,
@@ -38,13 +38,13 @@ type ActivityCalendarStats = {
 
 // Users
 export const userApi = {
-  getUser: (id: string): Promise<User> =>
+  getUser: (id: string): Promise<PublicUser> =>
     apiRequest("GET", `/api/users/${id}`).then((res) => res.json()),
 
-  createUser: (user: InsertUser): Promise<User> =>
+  createUser: (user: InsertUser): Promise<PublicUser> =>
     apiRequest("POST", "/api/users", user).then((res) => res.json()),
 
-  getManagersList: (): Promise<User[]> =>
+  getManagersList: (): Promise<PublicUser[]> =>
     apiRequest("GET", "/api/users/managers").then((res) => res.json()),
 
   importUsers: (

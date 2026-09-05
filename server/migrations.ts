@@ -21,6 +21,9 @@ export async function runDatabaseMigrations(): Promise<void> {
     ALTER TABLE employees
       ADD COLUMN IF NOT EXISTS is_on_maternity_leave boolean NOT NULL DEFAULT false;
 
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+
     CREATE TABLE IF NOT EXISTS user_login_sessions (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id varchar REFERENCES users(id) ON DELETE SET NULL,

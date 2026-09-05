@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,20 @@ export default function Profile() {
       </header>
 
       <main className="mx-auto w-full max-w-2xl p-4 space-y-4">
+        {user?.mustChangePassword && (
+          <Card className="border-amber-300 bg-amber-50 text-amber-950">
+            <CardContent className="flex gap-3 pt-6">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p className="font-semibold">Необходимо сменить временный пароль</p>
+                <p className="mt-1 text-sm">
+                  До смены пароля остальные разделы приложения будут недоступны.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -133,6 +147,7 @@ export default function Profile() {
               </Button>
 
               <Button type="submit" className="w-full" disabled={isSaving}>
+                {!isSaving && <CheckCircle2 className="mr-2 h-4 w-4" />}
                 {isSaving ? "Сохраняем..." : "Изменить пароль"}
               </Button>
             </form>

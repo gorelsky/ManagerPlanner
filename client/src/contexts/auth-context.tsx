@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import type { User } from "@shared/schema";
+import type { PublicUser } from "@shared/schema";
 
 interface AuthContextType {
-  user: User | null;
-  login: (user: User) => void;
+  user: PublicUser | null;
+  login: (user: PublicUser) => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -23,29 +23,40 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<PublicUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-useEffect(() => {
-  const savedUser = localStorage.getItem("user");
-  if (savedUser) {
-    try {
-      const parsed = JSON.parse(savedUser);
+  useEffect(() => {
+    let cancelled = false;
 
-      // Минимальная проверка структуры
-      if (parsed && parsed.id && parsed.username && parsed.role) {
-        setUser(parsed);
-      } else {
-        localStorage.removeItem("user");
+    const restoreSession = async () => {
+      try {
+        const response = await fetch("/api/auth/me", { credentials: "include" });
+        if (!response.ok) {
+          throw new Error("Session is not active");
+        }
+        const currentUser = (await response.json()) as PublicUser;
+        if (!cancelled) {
+          setUser(currentUser);
+          localStorage.setItem("user", JSON.stringify(currentUser));
+        }
+      } catch {
+        if (!cancelled) {
+          setUser(null);
+          localStorage.removeItem("user");
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    } catch {
-      localStorage.removeItem("user");
-    }
-  }
-  setIsLoading(false);
-}, []);
+    };
 
-  const login = (newUser: User) => {
+    void restoreSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const login = (newUser: PublicUser) => {
     setUser(newUser);
     localStorage.setItem("user", JSON.stringify(newUser));
   };

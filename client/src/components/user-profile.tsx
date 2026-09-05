@@ -1,7 +1,7 @@
-import type { User } from "@shared/schema";
+import type { PublicUser } from "@shared/schema";
 
 interface UserProfileProps {
-  user: User;
+  user: PublicUser;
 }
 
 export default function UserProfile({ user }: UserProfileProps) {

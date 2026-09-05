@@ -44,6 +44,7 @@ export const users = pgTable(
     profileImage: text("profile_image"),
     role: text("role").$type<UserRole>().notNull().default("manager"),
     cityId: varchar("city_id").references(() => cities.id),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
@@ -316,6 +317,7 @@ export const insertUserSchema = createInsertSchema(users, {
 })
   .omit({
     id: true,
+    mustChangePassword: true,
     createdAt: true,
   })
   .extend({

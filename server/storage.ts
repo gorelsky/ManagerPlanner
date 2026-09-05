@@ -40,7 +40,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser & { id?: string }): Promise<User>;
-  updateUserPassword(id: string, password: string): Promise<void>;
+  updateUserPassword(id: string, password: string, mustChangePassword?: boolean): Promise<void>;
   getManagersList(): Promise<User[]>;
   deleteUser(id: string): Promise<void>;
 
@@ -154,9 +154,16 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserPassword(id: string, password: string): Promise<void> {
+  async updateUserPassword(
+    id: string,
+    password: string,
+    mustChangePassword = false,
+  ): Promise<void> {
     const hashedPassword = await hashPassword(password);
-    await db.update(users).set({ password: hashedPassword }).where(eq(users.id, id));
+    await db
+      .update(users)
+      .set({ password: hashedPassword, mustChangePassword })
+      .where(eq(users.id, id));
   }
 
   async deleteUser(id: string): Promise<void> {
@@ -1036,6 +1043,7 @@ export class DatabaseStorage implements IStorage {
           profileImage: users.profileImage,
           role: users.role,
           cityId: users.cityId,
+          mustChangePassword: users.mustChangePassword,
           createdAt: users.createdAt,
         },
       })
@@ -1074,6 +1082,7 @@ export class DatabaseStorage implements IStorage {
         profileImage: users.profileImage,
         role: users.role,
         cityId: users.cityId,
+        mustChangePassword: users.mustChangePassword,
         createdAt: users.createdAt,
       })
       .from(users)
