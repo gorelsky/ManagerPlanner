@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { InputHTMLAttributes } from "react";
+import * as XLSX from "xlsx";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3, TestTube2 } from "lucide-react";
 
@@ -541,12 +542,22 @@ export default function Admin() {
     try {
       setIsImportingPlanPerformance(true);
       const files = planFiles
-        .filter((file) => file.name.toLowerCase().endsWith(".csv"))
+        .filter((file) => /\.(csv|xlsx|xls)$/i.test(file.name))
         .sort((a, b) => a.name.localeCompare(b.name));
       if (files.length === 0) {
-        throw new Error("В выбранной папке нет CSV-файлов");
+        throw new Error("В выбранной папке нет файлов CSV или Excel");
       }
-      const texts = await Promise.all(files.map((file) => file.text()));
+      const texts = await Promise.all(
+        files.map(async (file) => {
+          if (/\.(xlsx|xls)$/i.test(file.name)) {
+            const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            if (!firstSheet) throw new Error(`Excel-файл пуст: ${file.name}`);
+            return XLSX.utils.sheet_to_csv(firstSheet);
+          }
+          return file.text();
+        }),
+      );
       const [first, ...rest] = texts;
       const rows = [first, ...rest.map((text) => text.split(/\r?\n/).slice(1).join("\n"))]
         .filter(Boolean)
@@ -902,6 +913,7 @@ export default function Admin() {
                       id="plan-performance-folder"
                       type="file"
                       multiple
+                      accept=".csv,.xlsx,.xls"
                       {...({
                         webkitdirectory: "",
                         directory: "",
@@ -913,7 +925,7 @@ export default function Admin() {
                       className="mt-1 block w-full text-sm"
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Выберите папку с CSV-файлами. Колонки: managerEmail,region,
+                      Выберите папку с CSV- или Excel-файлами. Колонки: managerEmail,region,
                       weekStart,planAmount,actualAmount. Повторная загрузка той же
                       недели обновляет ее показатели.
                     </p>
