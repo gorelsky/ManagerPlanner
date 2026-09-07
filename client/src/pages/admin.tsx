@@ -866,7 +866,6 @@ export default function Admin() {
                     <Input
                       id="manager-file"
                       type="file"
-                      accept=".csv,text/csv"
                       onChange={(e) => setManagerFile(e.target.files?.[0] || null)}
                       disabled={isReadOnly}
                     />
@@ -903,7 +902,6 @@ export default function Admin() {
                       id="plan-performance-folder"
                       type="file"
                       multiple
-                      accept=".csv,text/csv"
                       {...({
                         webkitdirectory: "",
                         directory: "",
@@ -915,8 +913,9 @@ export default function Admin() {
                       className="mt-1 block w-full text-sm"
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Колонки: managerEmail,region,weekStart,planAmount,actualAmount.
-                      Повторная загрузка той же недели обновляет ее показатели.
+                      Выберите папку с CSV-файлами. Колонки: managerEmail,region,
+                      weekStart,planAmount,actualAmount. Повторная загрузка той же
+                      недели обновляет ее показатели.
                     </p>
                   </div>
                   <Button
