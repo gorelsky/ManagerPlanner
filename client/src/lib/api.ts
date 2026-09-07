@@ -18,6 +18,7 @@ import type {
   Holiday,
   ManagerCityWithDetails,
   UserLoginSession,
+  ManagerPlanPerformanceWithManager,
 } from "@shared/schema";
 
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
@@ -101,6 +102,16 @@ export const cityApi = {
 export const loginSessionsApi = {
   getLoginSessions: (limit = 200): Promise<UserLoginSession[]> =>
     apiRequest("GET", `/api/login-sessions?limit=${limit}`).then((res) =>
+      res.json(),
+    ),
+};
+
+export const planPerformanceApi = {
+  get: (): Promise<ManagerPlanPerformanceWithManager[]> =>
+    apiRequest("GET", "/api/plan-performance").then((res) => res.json()),
+
+  import: (csvData: string): Promise<{ imported: number }> =>
+    apiRequest("POST", "/api/plan-performance/import", { csvData }).then((res) =>
       res.json(),
     ),
 };

@@ -6,6 +6,7 @@ import {
   activities,
   messages,
   managerCities,
+  managerPlanPerformance,
   holidays,
   userLoginSessions,
   type User,
@@ -26,6 +27,7 @@ import {
   type InsertMessage,
   type MessageWithDetails,
   type ManagerCityWithDetails,
+  type ManagerPlanPerformanceWithManager,
   type Holiday,
   type InsertHoliday,
   type UserLoginSession,
@@ -62,6 +64,8 @@ export interface IStorage {
   getCitiesByManager(managerId: string): Promise<City[]>;
   getAllManagerCities(): Promise<ManagerCityWithDetails[]>;
   importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }>;
+  getManagerPlanPerformance(managerId?: string): Promise<ManagerPlanPerformanceWithManager[]>;
+  importManagerPlanPerformance(csvData: string): Promise<{ imported: number }>;
 
   // Employees
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
@@ -433,6 +437,148 @@ export class DatabaseStorage implements IStorage {
       manager: row.manager || undefined,
       city: row.city || undefined,
     }));
+  }
+
+  async getManagerPlanPerformance(
+    managerId?: string,
+  ): Promise<ManagerPlanPerformanceWithManager[]> {
+    const rows = await db
+      .select({
+        id: managerPlanPerformance.id,
+        managerId: managerPlanPerformance.managerId,
+        region: managerPlanPerformance.region,
+        weekStart: managerPlanPerformance.weekStart,
+        planAmount: managerPlanPerformance.planAmount,
+        actualAmount: managerPlanPerformance.actualAmount,
+        updatedAt: managerPlanPerformance.updatedAt,
+        manager: users,
+      })
+      .from(managerPlanPerformance)
+      .innerJoin(users, eq(managerPlanPerformance.managerId, users.id))
+      .where(managerId ? eq(managerPlanPerformance.managerId, managerId) : undefined)
+      .orderBy(desc(managerPlanPerformance.weekStart), asc(managerPlanPerformance.region));
+
+    const latest = new Map<string, ManagerPlanPerformanceWithManager>();
+    for (const row of rows) {
+      const key = `${row.managerId}:${row.region}`;
+      if (latest.has(key)) continue;
+      const plan = Number(row.planAmount);
+      const actual = Number(row.actualAmount);
+      latest.set(key, {
+        ...row,
+        manager: {
+          id: row.manager.id,
+          username: row.manager.username,
+          firstName: row.manager.firstName,
+          lastName: row.manager.lastName,
+          middleName: row.manager.middleName,
+        },
+        completionPercent: plan > 0 ? Number(((actual / plan) * 100).toFixed(1)) : 0,
+        deltaAmount: Number((actual - plan).toFixed(2)),
+      });
+    }
+    return Array.from(latest.values());
+  }
+
+  async importManagerPlanPerformance(csvData: string): Promise<{ imported: number }> {
+    const lines = csvData
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length < 2) return { imported: 0 };
+
+    const parseLine = (line: string) => {
+      const delimiter = line.includes(";") ? ";" : ",";
+      const values: string[] = [];
+      let value = "";
+      let quoted = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === '"') {
+          if (quoted && line[i + 1] === '"') {
+            value += '"';
+            i += 1;
+          } else {
+            quoted = !quoted;
+          }
+        } else if (char === delimiter && !quoted) {
+          values.push(value.trim());
+          value = "";
+        } else {
+          value += char;
+        }
+      }
+      values.push(value.trim());
+      return values;
+    };
+
+    const headers = parseLine(lines[0]).map((header) =>
+      header.replace(/^\uFEFF/, "").toLowerCase(),
+    );
+    const indexOf = (...names: string[]) => {
+      const index = names.map((name) => headers.indexOf(name)).find((index) => index >= 0);
+      if (index === undefined) throw new Error(`В CSV отсутствует колонка: ${names[0]}`);
+      return index;
+    };
+    const managerIndex = indexOf("manageremail", "managerusername", "manager");
+    const regionIndex = indexOf("region");
+    const weekIndex = indexOf("weekstart", "week_start", "week");
+    const planIndex = indexOf("planamount", "plan_amount", "plan");
+    const actualIndex = indexOf("actualamount", "actual_amount", "actual", "fact");
+
+    return db.transaction(async (tx) => {
+      let imported = 0;
+      const dataLines = lines.slice(1);
+      for (let lineNumber = 0; lineNumber < dataLines.length; lineNumber += 1) {
+        const line = dataLines[lineNumber];
+        const values = parseLine(line);
+        const managerUsername = values[managerIndex]?.trim();
+        const region = values[regionIndex]?.trim();
+        const weekStart = new Date(values[weekIndex]);
+        const planAmount = Number(values[planIndex]?.replace(",", "."));
+        const actualAmount = Number(values[actualIndex]?.replace(",", "."));
+        if (
+          !managerUsername ||
+          !region ||
+          Number.isNaN(weekStart.getTime()) ||
+          !Number.isFinite(planAmount) ||
+          !Number.isFinite(actualAmount)
+        ) {
+          throw new Error(`Некорректные данные в строке CSV ${lineNumber + 2}`);
+        }
+        const manager = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.username, managerUsername), eq(users.role, "manager")))
+          .limit(1);
+        if (!manager[0]) {
+          throw new Error(`Менеджер не найден: ${managerUsername}`);
+        }
+        await tx
+          .insert(managerPlanPerformance)
+          .values({
+            managerId: manager[0].id,
+            region,
+            weekStart,
+            planAmount: planAmount.toFixed(2),
+            actualAmount: actualAmount.toFixed(2),
+          })
+          .onConflictDoUpdate({
+            target: [
+              managerPlanPerformance.managerId,
+              managerPlanPerformance.region,
+              managerPlanPerformance.weekStart,
+            ],
+            set: {
+              planAmount: planAmount.toFixed(2),
+              actualAmount: actualAmount.toFixed(2),
+              updatedAt: new Date(),
+            },
+          });
+        imported += 1;
+      }
+      return { imported };
+    });
   }
 
   async getAllEmployees(limit?: number, offset?: number): Promise<EmployeeWithDetails[]> {

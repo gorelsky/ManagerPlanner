@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { InputHTMLAttributes } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3, TestTube2 } from "lucide-react";
 
@@ -32,6 +33,7 @@ import {
   cityApi,
   holidaysApi,
   loginSessionsApi,
+  planPerformanceApi,
 } from "@/lib/api";
 import type { EmployeeWithDetails, ActivityWithDetails, City, Holiday, ManagerCityWithDetails, UserLoginSession, UserRole } from "@shared/schema";
 
@@ -97,12 +99,14 @@ export default function Admin() {
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
   const [uploadTab, setUploadTab] = useState<
-    "employees" | "cities" | "manager-cities" | "holidays" | "managers"
+    "employees" | "cities" | "manager-cities" | "holidays" | "managers" | "plan-performance"
   >("employees");
 
   const [managerFile, setManagerFile] = useState<File | null>(null);
   const [managerRole, setManagerRole] = useState<"manager" | "admin">("manager");
   const [isImportingManagers, setIsImportingManagers] = useState(false);
+  const [planFiles, setPlanFiles] = useState<File[]>([]);
+  const [isImportingPlanPerformance, setIsImportingPlanPerformance] = useState(false);
 
   const [citiesCsv, setCitiesCsv] = useState("");
   const [isImportingCities, setIsImportingCities] = useState(false);
@@ -524,6 +528,47 @@ export default function Admin() {
     }
   };
 
+  const handleImportPlanPerformance = async () => {
+    if (isReadOnly) return;
+    if (planFiles.length === 0) {
+      toast({
+        title: "Ошибка",
+        description: "Выберите папку с CSV-файлом выполнения плана",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      setIsImportingPlanPerformance(true);
+      const files = planFiles
+        .filter((file) => file.name.toLowerCase().endsWith(".csv"))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      if (files.length === 0) {
+        throw new Error("В выбранной папке нет CSV-файлов");
+      }
+      const texts = await Promise.all(files.map((file) => file.text()));
+      const [first, ...rest] = texts;
+      const rows = [first, ...rest.map((text) => text.split(/\r?\n/).slice(1).join("\n"))]
+        .filter(Boolean)
+        .join("\n");
+      const result = await planPerformanceApi.import(rows);
+      queryClient.invalidateQueries({ queryKey: ["/api/plan-performance"] });
+      toast({
+        title: "Выполнение плана обновлено",
+        description: `Импортировано строк: ${result.imported}`,
+      });
+      setPlanFiles([]);
+    } catch (error: any) {
+      toast({
+        title: "Ошибка импорта выполнения плана",
+        description: error.message || "Не удалось прочитать данные из папки",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImportingPlanPerformance(false);
+    }
+  };
+
   const downloadTemplate = () => {
     if (isReadOnly) return;
     const template =
@@ -628,6 +673,15 @@ export default function Admin() {
               >
                 <Upload className="w-4 h-4 mr-1" />
                 Массовая загрузка менеджеров
+              </Button>
+              <Button
+                variant={uploadTab === "plan-performance" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setUploadTab("plan-performance")}
+                className={uploadTab === "plan-performance" ? "bg-blue-header hover:bg-blue-700" : ""}
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                Выполнение плана
               </Button>
             </div>
 
@@ -830,6 +884,47 @@ export default function Admin() {
                     {isImportingManagers
                       ? "Импортирую менеджеров..."
                       : "Импортировать менеджеров"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            {uploadTab === "plan-performance" && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Upload className="w-5 h-5" />
+                    <span>Еженедельное выполнение плана</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="plan-performance-folder">Папка с CSV-файлами</Label>
+                    <input
+                      id="plan-performance-folder"
+                      type="file"
+                      multiple
+                      accept=".csv,text/csv"
+                      {...({
+                        webkitdirectory: "",
+                        directory: "",
+                      } as unknown as InputHTMLAttributes<HTMLInputElement>)}
+                      onChange={(event) =>
+                        setPlanFiles(Array.from(event.target.files ?? []))
+                      }
+                      disabled={isReadOnly}
+                      className="mt-1 block w-full text-sm"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Колонки: managerEmail,region,weekStart,planAmount,actualAmount.
+                      Повторная загрузка той же недели обновляет ее показатели.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleImportPlanPerformance}
+                    disabled={isImportingPlanPerformance || planFiles.length === 0 || isReadOnly}
+                    className="w-full"
+                  >
+                    {isImportingPlanPerformance ? "Обновляю..." : "Загрузить выполнение плана"}
                   </Button>
                 </CardContent>
               </Card>

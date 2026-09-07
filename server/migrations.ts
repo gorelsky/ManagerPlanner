@@ -45,6 +45,24 @@ export async function runDatabaseMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS is_test_session boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS initiated_by_username text;
 
+    CREATE TABLE IF NOT EXISTS manager_plan_performance (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      manager_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      region text NOT NULL,
+      week_start timestamp NOT NULL,
+      plan_amount numeric(14, 2) NOT NULL,
+      actual_amount numeric(14, 2) NOT NULL,
+      updated_at timestamp NOT NULL DEFAULT NOW(),
+      CONSTRAINT manager_plan_performance_unique_week
+        UNIQUE (manager_id, region, week_start)
+    );
+
+    CREATE INDEX IF NOT EXISTS manager_plan_performance_manager_idx
+      ON manager_plan_performance (manager_id);
+
+    CREATE INDEX IF NOT EXISTS manager_plan_performance_week_idx
+      ON manager_plan_performance (week_start DESC);
+
   `);
 
   console.log("Database migrations applied");
