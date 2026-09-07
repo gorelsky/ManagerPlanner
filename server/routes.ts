@@ -454,6 +454,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/plan-performance", requireManagerOrAdmin, async (req, res) => {
+    try {
+      const managerId =
+        req.user?.role === "manager" ? req.user.id : undefined;
+      const performance = await storage.getManagerPlanPerformance(managerId);
+      res.json(performance);
+    } catch (error) {
+      console.error("Get plan performance error:", error);
+      res.status(500).json({ message: "Не удалось загрузить выполнение планов" });
+    }
+  });
+
+  app.post("/api/plan-performance/import", requireAdmin, async (req, res) => {
+    try {
+      const csvData = z.object({ csvData: z.string().min(1) }).parse(req.body).csvData;
+      const result = await storage.importManagerPlanPerformance(csvData);
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "CSV-файл не передан" });
+      }
+      console.error("Import plan performance error:", error);
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Не удалось импортировать выполнение планов",
+      });
+    }
+  });
+
   app.get("/api/users/testable", requireSystemAdmin, async (_req, res) => {
     try {
       const testableUsers = await storage.getTestableUsersList();

@@ -215,6 +215,30 @@ export const managerCities = pgTable(
   }),
 );
 
+export const managerPlanPerformance = pgTable(
+  "manager_plan_performance",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    managerId: varchar("manager_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    region: text("region").notNull(),
+    weekStart: timestamp("week_start").notNull(),
+    planAmount: numeric("plan_amount", { precision: 14, scale: 2 }).notNull(),
+    actualAmount: numeric("actual_amount", { precision: 14, scale: 2 }).notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    managerIdx: index("manager_plan_performance_manager_idx").on(table.managerId),
+    weekIdx: index("manager_plan_performance_week_idx").on(table.weekStart),
+    uniqueWeek: unique("manager_plan_performance_unique_week").on(
+      table.managerId,
+      table.region,
+      table.weekStart,
+    ),
+  }),
+);
+
 /* === Relations === */
 
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -228,6 +252,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     references: [cities.id],
   }),
   managerCities: many(managerCities),
+  planPerformance: many(managerPlanPerformance),
   loginSessions: many(userLoginSessions),
 }));
 
@@ -309,6 +334,16 @@ export const managerCitiesRelations = relations(managerCities, ({ one }) => ({
     references: [cities.id],
   }),
 }));
+
+export const managerPlanPerformanceRelations = relations(
+  managerPlanPerformance,
+  ({ one }) => ({
+    manager: one(users, {
+      fields: [managerPlanPerformance.managerId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const holidaysRelations = relations(holidays, () => ({}));
 
@@ -412,6 +447,12 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 export type ManagerCity = typeof managerCities.$inferSelect;
 export type InsertManagerCity = z.infer<typeof insertManagerCitySchema>;
+export type ManagerPlanPerformance = typeof managerPlanPerformance.$inferSelect;
+export type ManagerPlanPerformanceWithManager = ManagerPlanPerformance & {
+  manager: Pick<PublicUser, "id" | "username" | "firstName" | "lastName" | "middleName">;
+  completionPercent: number;
+  deltaAmount: number;
+};
 
 export type ManagerCityWithDetails = ManagerCity & {
   manager: Pick<PublicUser, "id" | "username" | "firstName" | "lastName" | "middleName">;

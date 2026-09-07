@@ -13,6 +13,8 @@ import {
   List,
   LayoutGrid,
   ChevronDown,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import {
   format,
@@ -59,8 +61,14 @@ import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi, holidaysApi, userApi } from "@/lib/api";
-import type { ActivityStatus, ActivityWithDetails, ApprovalStatus, PublicUser } from "@shared/schema";
+import { activityApi, holidaysApi, userApi, planPerformanceApi } from "@/lib/api";
+import type {
+  ActivityStatus,
+  ActivityWithDetails,
+  ApprovalStatus,
+  PublicUser,
+  ManagerPlanPerformanceWithManager,
+} from "@shared/schema";
 import {
   PieChart,
   Pie,
@@ -558,6 +566,21 @@ export default function Dashboard() {
 
   const isLoading = isPrivileged ? allLoading : ownLoading;
 
+  const { data: planPerformance = [] } = useQuery({
+    queryKey: ["/api/plan-performance", user.id],
+    queryFn: () => planPerformanceApi.get(),
+    refetchOnWindowFocus: true,
+  });
+
+  const formatMoney = (value: number | string) =>
+    `${Number(value).toLocaleString("ru-RU", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })} ₽`;
+
+  const formatPerformanceManagerName = (item: ManagerPlanPerformanceWithManager) =>
+    `${item.manager.lastName} ${item.manager.firstName}`.trim();
+
   return (
     <div className="min-h-screen pb-20">
       {/* Header */}
@@ -614,6 +637,76 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+
+      <section className="px-4 pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">
+              Выполнение плана по регионам
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Последнее загруженное недельное значение
+            </p>
+          </div>
+        </div>
+        {planPerformance.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              Данные выполнения плана пока не загружены.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {planPerformance.map((item) => {
+              const isPositive = item.deltaAmount >= 0;
+              return (
+                <Card key={`${item.managerId}-${item.region}`} className="overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">{formatPerformanceManagerName(item)}</p>
+                        <p className="text-sm text-muted-foreground">{item.region}</p>
+                      </div>
+                      <span
+                        className={`text-lg font-bold ${
+                          item.completionPercent >= 100 ? "text-emerald-600" : "text-amber-600"
+                        }`}
+                      >
+                        {item.completionPercent.toLocaleString("ru-RU")}%
+                      </span>
+                    </div>
+                    <div className="mb-2 h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full rounded-full ${
+                          item.completionPercent >= 100 ? "bg-emerald-500" : "bg-amber-500"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, item.completionPercent))}%` }}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Факт</p>
+                        <p className="font-medium">{formatMoney(item.actualAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">План</p>
+                        <p className="font-medium">{formatMoney(item.planAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Дельта</p>
+                        <p className={`flex items-center gap-1 font-medium ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
+                          {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {isPositive ? "+" : ""}{formatMoney(item.deltaAmount)}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Search and date navigation */}
       <div className="px-4 py-4 bg-card">
