@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { InputHTMLAttributes } from "react";
 import * as XLSX from "xlsx";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3, TestTube2 } from "lucide-react";
@@ -914,21 +913,20 @@ export default function Admin() {
                       type="file"
                       multiple
                       accept=".csv,.xlsx,.xls"
-                      {...({
-                        webkitdirectory: "",
-                        directory: "",
-                      } as unknown as InputHTMLAttributes<HTMLInputElement>)}
-                      onChange={(event) =>
-                        setPlanFiles(Array.from(event.target.files ?? []))
-                      }
+                      onChange={(event) => setPlanFiles(Array.from(event.target.files ?? []))}
                       disabled={isReadOnly}
                       className="mt-1 block w-full text-sm"
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Выберите папку с CSV- или Excel-файлами. Колонки: managerEmail,region,
+                      Выберите один или несколько CSV- или Excel-файлов. Колонки: managerEmail,region,
                       weekStart,planAmount,actualAmount. Повторная загрузка той же
                       недели обновляет ее показатели.
                     </p>
+                    {planFiles.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Выбрано файлов: {planFiles.length}
+                      </p>
+                    )}
                   </div>
                   <Button
                     onClick={handleImportPlanPerformance}
