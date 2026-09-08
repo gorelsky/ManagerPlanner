@@ -460,7 +460,7 @@ export class DatabaseStorage implements IStorage {
 
     const latest = new Map<string, ManagerPlanPerformanceWithManager>();
     for (const row of rows) {
-      const key = `${row.managerId}:${row.region}`;
+      const key = row.managerId;
       if (latest.has(key)) continue;
       const plan = Number(row.planAmount);
       const actual = Number(row.actualAmount);
