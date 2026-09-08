@@ -534,15 +534,21 @@ export class DatabaseStorage implements IStorage {
         const values = parseLine(line);
         const managerUsername = values[managerIndex]?.trim();
         const region = values[regionIndex]?.trim();
-        const weekStartValue = values[weekIndex]?.trim();
-        const russianDateMatch = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+.*)?$/.exec(weekStartValue);
+        const weekStartValue = values[weekIndex]?.trim() ?? "";
+        const russianDateMatch = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+.*)?$/.exec(
+          weekStartValue,
+        );
+        const excelSerialDate =
+          /^\d+(\.\d+)?$/.test(weekStartValue) && Number(weekStartValue) > 20_000
+            ? new Date(Date.UTC(1899, 11, 30) + Number(weekStartValue) * 86_400_000)
+            : undefined;
         const weekStart = russianDateMatch
           ? new Date(
               Number(russianDateMatch[3]),
               Number(russianDateMatch[2]) - 1,
               Number(russianDateMatch[1]),
             )
-          : new Date(weekStartValue);
+          : excelSerialDate ?? new Date(weekStartValue);
         const parseAmount = (value: string | undefined) =>
           Number(
             (value ?? "")
@@ -553,14 +559,26 @@ export class DatabaseStorage implements IStorage {
           );
         const planAmount = parseAmount(values[planIndex]);
         const actualAmount = parseAmount(values[actualIndex]);
-        if (
-          !managerUsername ||
-          !region ||
-          Number.isNaN(weekStart.getTime()) ||
-          !Number.isFinite(planAmount) ||
-          !Number.isFinite(actualAmount)
-        ) {
-          throw new Error(`Некорректные данные в строке CSV ${lineNumber + 2}`);
+        if (!managerUsername) {
+          throw new Error(`Строка CSV ${lineNumber + 2}: пустой managerEmail`);
+        }
+        if (!region) {
+          throw new Error(`Строка CSV ${lineNumber + 2}: пустой region`);
+        }
+        if (Number.isNaN(weekStart.getTime())) {
+          throw new Error(
+            `Строка CSV ${lineNumber + 2}: некорректная дата "${weekStartValue}"`,
+          );
+        }
+        if (!Number.isFinite(planAmount)) {
+          throw new Error(
+            `Строка CSV ${lineNumber + 2}: некорректный planAmount "${values[planIndex] ?? ""}"`,
+          );
+        }
+        if (!Number.isFinite(actualAmount)) {
+          throw new Error(
+            `Строка CSV ${lineNumber + 2}: некорректный actualAmount "${values[actualIndex] ?? ""}"`,
+          );
         }
         const manager = await tx
           .select({ id: users.id })
@@ -568,7 +586,9 @@ export class DatabaseStorage implements IStorage {
           .where(and(eq(users.username, managerUsername), eq(users.role, "manager")))
           .limit(1);
         if (!manager[0]) {
-          throw new Error(`Менеджер не найден: ${managerUsername}`);
+          throw new Error(
+            `Строка CSV ${lineNumber + 2}: менеджер не найден "${managerUsername}"`,
+          );
         }
         await tx
           .insert(managerPlanPerformance)
