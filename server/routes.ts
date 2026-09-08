@@ -17,6 +17,8 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import bcrypt from "bcrypt";
+import crypto from "node:crypto";
+import * as XLSX from "xlsx";
 import { changePasswordSchema } from "./passwords";
 
 // ===================== Типы и расширения =====================
@@ -119,7 +121,17 @@ function requireAllPlansViewer(req: Request, res: Response, next: NextFunction) 
   if (!["admin", "director", "hr_director"].includes(req.user.role)) {
     return res.status(403).json({ message: "Forbidden" });
   }
+
   next();
+}
+
+function hasValidPlanImportToken(req: Request): boolean {
+  const configuredToken = process.env.PLAN_IMPORT_TOKEN;
+  const suppliedToken = req.header("x-plan-import-token");
+  if (!configuredToken || !suppliedToken) return false;
+  const expected = Buffer.from(configuredToken);
+  const actual = Buffer.from(suppliedToken);
+  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
 // ===================== Вспомогательные функции =====================
@@ -222,6 +234,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.clearCookie("connect.sid");
       res.json({ message: "Выход выполнен" });
     });
+  });
+
+  app.post("/api/plan-performance/import-file", async (req, res) => {
+    if (!hasValidPlanImportToken(req)) {
+      return res.status(401).json({ message: "Недействительный токен импорта" });
+    }
+
+    try {
+      const payload = z.object({
+        fileName: z.string().trim().min(1).max(255),
+        fileBase64: z.string().min(1).max(18_000_000),
+      }).parse(req.body);
+      const fileBuffer = Buffer.from(payload.fileBase64, "base64");
+      if (fileBuffer.length === 0) {
+        return res.status(400).json({ message: "Файл пуст" });
+      }
+
+      let csvData: string;
+      if (/\.(xlsx|xls)$/i.test(payload.fileName)) {
+        const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        if (!firstSheet) {
+          return res.status(400).json({ message: "Excel-файл не содержит листов" });
+        }
+        csvData = XLSX.utils.sheet_to_csv(firstSheet);
+      } else if (/\.csv$/i.test(payload.fileName)) {
+        csvData = fileBuffer.toString("utf8");
+      } else {
+        return res.status(400).json({ message: "Поддерживаются только CSV, XLS и XLSX" });
+      }
+
+      const result = await storage.importManagerPlanPerformance(csvData);
+      res.json({ ...result, fileName: payload.fileName });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Некорректные данные файла" });
+      }
+      console.error("Import plan performance file error:", error);
+      res.status(400).json({
+        message: error instanceof Error ? error.message : "Не удалось импортировать файл",
+      });
+    }
   });
 
   // ----- Все остальные маршруты требуют аутентификации -----
