@@ -535,7 +535,7 @@ export class DatabaseStorage implements IStorage {
         const managerUsername = values[managerIndex]?.trim();
         const region = values[regionIndex]?.trim();
         const weekStartValue = values[weekIndex]?.trim();
-        const russianDateMatch = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(weekStartValue);
+        const russianDateMatch = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+.*)?$/.exec(weekStartValue);
         const weekStart = russianDateMatch
           ? new Date(
               Number(russianDateMatch[3]),
@@ -543,8 +543,16 @@ export class DatabaseStorage implements IStorage {
               Number(russianDateMatch[1]),
             )
           : new Date(weekStartValue);
-        const planAmount = Number(values[planIndex]?.replace(",", "."));
-        const actualAmount = Number(values[actualIndex]?.replace(",", "."));
+        const parseAmount = (value: string | undefined) =>
+          Number(
+            (value ?? "")
+              .replace(/\u00a0/g, "")
+              .replace(/\s/g, "")
+              .replace(/[₽$€]/g, "")
+              .replace(",", "."),
+          );
+        const planAmount = parseAmount(values[planIndex]);
+        const actualAmount = parseAmount(values[actualIndex]);
         if (
           !managerUsername ||
           !region ||
