@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path -LiteralPath $FolderPath -PathType Container)) {
-  throw "Папка не найдена: $FolderPath"
+  throw "Folder not found: $FolderPath"
 }
 
 $file = Get-ChildItem -LiteralPath $FolderPath -File |
@@ -21,7 +21,7 @@ $file = Get-ChildItem -LiteralPath $FolderPath -File |
   Select-Object -First 1
 
 if (-not $file) {
-  throw "В папке нет CSV/XLS/XLSX-файлов: $FolderPath"
+  throw "No CSV/XLS/XLSX files found in folder: $FolderPath"
 }
 
 $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
@@ -41,4 +41,4 @@ $response = Invoke-RestMethod `
   -Headers $headers `
   -Body $payload
 
-Write-Output "Импортирован файл $($response.fileName): $($response.imported) строк"
+Write-Output "Imported file $($response.fileName): $($response.imported) rows"
