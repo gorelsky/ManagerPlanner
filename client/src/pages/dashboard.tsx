@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   Plus,
-  Download,
+  FileSpreadsheet,
   Trash2,
   Check,
   X,
@@ -61,7 +61,16 @@ import ActivityCard from "@/components/activity-card";
 import CreateActivityModal from "@/components/create-activity-modal";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi, holidaysApi, userApi, planPerformanceApi } from "@/lib/api";
+
+import {
+  activityApi,
+  holidaysApi,
+  userApi,
+  planPerformanceApi,
+} from "@/lib/api";
+
+import { downloadPlanReportXlsx } from "@/lib/plan-report-xlsx";
+
 import type {
   ActivityStatus,
   ActivityWithDetails,
@@ -69,6 +78,7 @@ import type {
   PublicUser,
   ManagerPlanPerformanceWithManager,
 } from "@shared/schema";
+
 import {
   PieChart,
   Pie,
@@ -118,53 +128,6 @@ function formatManagerName(u: PublicUser) {
   return full || u.username;
 }
 
-function escapeCsv(value: string | number | undefined) {
-  const str = String(value ?? "");
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
-function exportActivitiesToCsv(activities: ActivityWithDetails[], filename: string) {
-  const headers = [
-    "Дата начала",
-    "Дата окончания",
-    "Менеджер",
-    "Тип",
-    "Город",
-    "Статус",
-    "Согласование",
-    "Сотрудник",
-    "Название",
-    "Описание",
-  ];
-  const rows = activities.map((a) => [
-    format(new Date(a.startDate), "dd.MM.yyyy HH:mm", { locale: ru }),
-    format(new Date(a.endDate), "dd.MM.yyyy HH:mm", { locale: ru }),
-    a.managerName || "—",
-    a.type?.name || "—",
-    a.city?.name || "—",
-    STATUS_CONFIG[a.status]?.label || a.status,
-    APPROVAL_CONFIG[a.approvalStatus || "created"].label,
-    a.employee
-      ? `${a.employee.lastName || ""} ${a.employee.firstName || ""}`.trim()
-      : "—",
-    a.title,
-    a.description || "",
-  ]);
-  const csv = [headers.join(","), ...rows.map((r) => r.map(escapeCsv).join(","))].join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -183,6 +146,7 @@ export default function Dashboard() {
   const [approvalFilter, setApprovalFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
+  const [isExporting, setIsExporting] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -523,6 +487,30 @@ export default function Dashboard() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
+  const handleExportXlsx = async () => {
+    setIsExporting(true);
+    try {
+      const periodLabel = format(currentDate, "LLLL yyyy", { locale: ru });
+      await downloadPlanReportXlsx(
+        filteredActivities,
+        `Отчет_планов_ТМ_${format(currentDate, "yyyy-MM")}.xlsx`,
+        { periodLabel },
+      );
+      toast({
+        title: "Отчёт сформирован",
+        description: `В Excel выгружено планов: ${filteredActivities.length}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Не удалось сформировать Excel",
+        description: error instanceof Error ? error.message : "Неизвестная ошибка",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const uniqueTypes = useMemo(() => {
     const map = new Map<string, string>();
     baseActivities.forEach((a) => {
@@ -791,9 +779,11 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportActivitiesToCsv(filteredActivities, `activities_${format(currentDate, "yyyy-MM", { locale: ru })}.csv`)}
+              onClick={handleExportXlsx}
+              disabled={isExporting}
             >
-              <Download className="w-4 h-4 mr-1" /> CSV
+              <FileSpreadsheet className="w-4 h-4 mr-1" />
+              {isExporting ? "Формирование…" : "Excel (.xlsx)"}
             </Button>
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-2 ml-auto">
