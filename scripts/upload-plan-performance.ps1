@@ -6,7 +6,9 @@ param(
   [string]$ApiUrl,
 
   [Parameter(Mandatory = $true)]
-  [string]$ImportToken
+  [string]$ImportToken,
+
+  [string]$FileName = "plan-performance.xlsx"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,13 +17,11 @@ if (-not (Test-Path -LiteralPath $FolderPath -PathType Container)) {
   throw "Folder not found: $FolderPath"
 }
 
-$file = Get-ChildItem -LiteralPath $FolderPath -File |
-  Where-Object { $_.Extension -match "^\.(xlsx|xls|csv)$" } |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 1
+$filePath = Join-Path -Path $FolderPath -ChildPath $FileName
+$file = Get-Item -LiteralPath $filePath -ErrorAction SilentlyContinue
 
-if (-not $file) {
-  throw "No CSV/XLS/XLSX files found in folder: $FolderPath"
+if (-not $file -or $file.PSIsContainer) {
+  throw "Import file not found: $filePath"
 }
 
 $bytes = [System.IO.File]::ReadAllBytes($file.FullName)

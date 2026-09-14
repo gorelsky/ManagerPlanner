@@ -13,6 +13,7 @@
     "check": "tsc",
     "test:passwords": "esbuild server/passwords.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/passwords.test.mjs && node --test .local/tests/passwords.test.mjs",
     "test:plan-report": "esbuild client/src/lib/plan-report-xlsx.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/plan-report-xlsx.test.mjs && node --test .local/tests/plan-report-xlsx.test.mjs",
+    "test:plan-performance": "esbuild server/plan-performance.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/plan-performance.test.mjs && node --test .local/tests/plan-performance.test.mjs",
     "users:temporary-passwords": "esbuild scripts/generate-temporary-passwords.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tools/generate-temporary-passwords.mjs && node .local/tools/generate-temporary-passwords.mjs",
     "db:push": "drizzle-kit push"
   },

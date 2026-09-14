@@ -558,6 +558,7 @@ export default function Dashboard() {
     queryKey: ["/api/plan-performance", user.id],
     queryFn: () => planPerformanceApi.get(),
     refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
 
   const formatMoney = (value: number | string) =>

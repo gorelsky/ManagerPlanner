@@ -36,6 +36,10 @@ import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
+import {
+  getLatestAllowedPlanWeek,
+  parsePlanPerformanceWeek,
+} from "./plan-performance";
 
 export interface IStorage {
   // Users
@@ -442,6 +446,9 @@ export class DatabaseStorage implements IStorage {
   async getManagerPlanPerformance(
     managerId?: string,
   ): Promise<ManagerPlanPerformanceWithManager[]> {
+    const managerFilter = managerId
+      ? eq(managerPlanPerformance.managerId, managerId)
+      : undefined;
     const rows = await db
       .select({
         id: managerPlanPerformance.id,
@@ -455,12 +462,18 @@ export class DatabaseStorage implements IStorage {
       })
       .from(managerPlanPerformance)
       .innerJoin(users, eq(managerPlanPerformance.managerId, users.id))
-      .where(managerId ? eq(managerPlanPerformance.managerId, managerId) : undefined)
+      .where(
+        and(
+          managerFilter,
+          gte(managerPlanPerformance.weekStart, new Date(2020, 0, 1)),
+          lte(managerPlanPerformance.weekStart, getLatestAllowedPlanWeek()),
+        ),
+      )
       .orderBy(desc(managerPlanPerformance.weekStart), asc(managerPlanPerformance.region));
 
     const latest = new Map<string, ManagerPlanPerformanceWithManager>();
     for (const row of rows) {
-      const key = row.managerId;
+      const key = `${row.managerId}\u0000${row.region.trim().toLocaleLowerCase("ru-RU")}`;
       if (latest.has(key)) continue;
       const plan = Number(row.planAmount);
       const actual = Number(row.actualAmount);
@@ -535,20 +548,16 @@ export class DatabaseStorage implements IStorage {
         const managerUsername = values[managerIndex]?.trim();
         const region = values[regionIndex]?.trim();
         const weekStartValue = values[weekIndex]?.trim() ?? "";
-        const russianDateMatch = /^(\d{2})\.(\d{2})\.(\d{4})(?:\s+.*)?$/.exec(
-          weekStartValue,
-        );
-        const excelSerialDate =
-          /^\d+(\.\d+)?$/.test(weekStartValue) && Number(weekStartValue) > 20_000
-            ? new Date(Date.UTC(1899, 11, 30) + Number(weekStartValue) * 86_400_000)
-            : undefined;
-        const weekStart = russianDateMatch
-          ? new Date(
-              Number(russianDateMatch[3]),
-              Number(russianDateMatch[2]) - 1,
-              Number(russianDateMatch[1]),
-            )
-          : excelSerialDate ?? new Date(weekStartValue);
+        let weekStart: Date;
+        try {
+          weekStart = parsePlanPerformanceWeek(weekStartValue);
+        } catch (error) {
+          throw new Error(
+            `Строка CSV ${lineNumber + 2}: ${
+              error instanceof Error ? error.message : "некорректная дата"
+            }`,
+          );
+        }
         const parseAmount = (value: string | undefined) =>
           Number(
             (value ?? "")
@@ -564,11 +573,6 @@ export class DatabaseStorage implements IStorage {
         }
         if (!region) {
           throw new Error(`Строка CSV ${lineNumber + 2}: пустой region`);
-        }
-        if (Number.isNaN(weekStart.getTime())) {
-          throw new Error(
-            `Строка CSV ${lineNumber + 2}: некорректная дата "${weekStartValue}"`,
-          );
         }
         if (!Number.isFinite(planAmount)) {
           throw new Error(
