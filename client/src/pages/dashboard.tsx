@@ -23,6 +23,7 @@ import {
   startOfMonth,
   endOfMonth,
   startOfWeek,
+  endOfWeek,
   addDays,
   isSameMonth,
   isSameDay,
@@ -132,6 +133,7 @@ function formatManagerName(u: PublicUser) {
 
 export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [period, setPeriod] = useState<"month" | "week">("month");
   const [searchTerm, setSearchTerm] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<ActivityWithDetails | null>(null);
@@ -160,8 +162,11 @@ export default function Dashboard() {
   const canCreatePlans = user?.role !== "hr_director";
 
   // Dates
-  const startDate = startOfMonth(currentDate);
-  const endDate = endOfMonth(currentDate);
+  const startDate = period === "week" ? startOfWeek(currentDate, { weekStartsOn: 1 }) : startOfMonth(currentDate);
+  const endDate = period === "week" ? endOfWeek(currentDate, { weekStartsOn: 1 }) : endOfMonth(currentDate);
+  const periodLabel = period === "week"
+    ? `${format(startDate, "dd.MM.yyyy")} – ${format(endDate, "dd.MM.yyyy")}`
+    : format(currentDate, "LLLL yyyy", { locale: ru });
 
   // Managers list (for filters)
   const { data: managers = [] } = useQuery({
@@ -339,7 +344,7 @@ export default function Dashboard() {
       }
     }
     return map;
-  }, [filteredActivities, currentDate]);
+  }, [filteredActivities, currentDate, period]);
 
   const calendarStatsMap = useMemo(() => {
     if (isPrivileged) return privilegedCalendarMap;
@@ -433,8 +438,8 @@ export default function Dashboard() {
     },
   });
 
-  const handlePreviousMonth = () => setCurrentDate((prev) => subMonths(prev, 1));
-  const handleNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
+  const handlePreviousMonth = () => setCurrentDate((prev) => period === "week" ? addDays(prev, -7) : subMonths(prev, 1));
+  const handleNextMonth = () => setCurrentDate((prev) => period === "week" ? addDays(prev, 7) : addMonths(prev, 1));
 
   const handleMarkComplete = (id: string) => updateStatusMutation.mutate({ id, status: "completed" });
   const handleCancel = (id: string) => updateStatusMutation.mutate({ id, status: "cancelled" });
@@ -490,10 +495,9 @@ export default function Dashboard() {
   const handleExportXlsx = async () => {
     setIsExporting(true);
     try {
-      const periodLabel = format(currentDate, "LLLL yyyy", { locale: ru });
       await downloadPlanReportXlsx(
         filteredActivities,
-        `Отчет_планов_ТМ_${format(currentDate, "yyyy-MM")}.xlsx`,
+        `Отчет_планов_ТМ_${period === "week" ? format(startDate, "yyyy-MM-dd") + "_" + format(endDate, "yyyy-MM-dd") : format(currentDate, "yyyy-MM")}.xlsx`,
         { periodLabel },
       );
       toast({
@@ -528,12 +532,12 @@ export default function Dashboard() {
   }, [baseActivities]);
 
   // ── Calendar grid ───────────────────────────────────────────
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
+  const monthStart = startDate;
+  const monthEnd = endDate;
   const calendarStart = startOfWeek(monthStart, { locale: ru, weekStartsOn: 1 });
   const weeks: Date[][] = [];
   let current = calendarStart;
-  while (current <= monthEnd || weeks.length < 6) {
+  while (current <= monthEnd || weeks.length < (period === "week" ? 1 : 6)) {
     const week: Date[] = [];
     for (let i = 0; i < 7; i++) {
       week.push(current);
@@ -713,7 +717,12 @@ export default function Dashboard() {
           </div>
         )}
 
+        <div className="flex gap-2 mb-3" role="group" aria-label="Период просмотра">
+          <Button size="sm" variant={period === "month" ? "default" : "outline"} aria-pressed={period === "month"} onClick={() => { setPeriod("month"); setSelectedIds(new Set()); }}>Месяц</Button>
+          <Button size="sm" variant={period === "week" ? "default" : "outline"} aria-pressed={period === "week"} onClick={() => { setPeriod("week"); setSelectedIds(new Set()); }}>Неделя</Button>
+        </div>
         <DateNavigation
+          label={periodLabel}
           currentDate={currentDate}
           onPreviousMonth={handlePreviousMonth}
           onNextMonth={handleNextMonth}
@@ -1015,7 +1024,7 @@ export default function Dashboard() {
                       const stats = calendarStatsMap[dateKey];
 
                       const isToday = isSameDay(day, new Date());
-                      const inCurrentMonth = isSameMonth(day, monthStart);
+                      const inCurrentMonth = period === "week" || isSameMonth(day, monthStart);
                       const dayOfWeek = day.getDay();
                       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                       const isHoliday = holidayDates.has(dateKey);
