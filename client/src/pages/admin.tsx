@@ -95,6 +95,8 @@ function formatRole(role: UserRole): string {
 }
 
 export default function Admin() {
+  const emptyEmployee = { firstName: "", lastName: "", middleName: "", phone: "", email: "", cityId: "", managerId: "" };
+  const [employeeDraft, setEmployeeDraft] = useState(emptyEmployee);
   const [csvData, setCsvData] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<"reps" | "plans">("reps");
@@ -221,7 +223,7 @@ export default function Admin() {
   const importEmployeesMutation = useMutation({
     mutationFn: (data: string) => employeeApi.importEmployees(data),
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("/api/employees") });
       toast({
         title: "Импорт завершен",
         description: `Импортировано ${result.imported} сотрудников`,
@@ -237,6 +239,24 @@ export default function Admin() {
       });
       setIsImporting(false);
     },
+  });
+
+  const createEmployeeMutation = useMutation({
+    mutationFn: () => employeeApi.createEmployee({
+      firstName: employeeDraft.firstName.trim(),
+      lastName: employeeDraft.lastName.trim(),
+      middleName: employeeDraft.middleName.trim() || null,
+      email: employeeDraft.email.trim() || null,
+      phone: employeeDraft.phone.trim() || null,
+      cityId: employeeDraft.cityId || null,
+      managerId: employeeDraft.managerId || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("/api/employees") });
+      setEmployeeDraft(emptyEmployee);
+      toast({ title: "Медицинский представитель добавлен" });
+    },
+    onError: (error: Error) => toast({ title: "Не удалось добавить МП", description: error.message, variant: "destructive" }),
   });
 
   const importManagersMutation = useMutation({
@@ -696,6 +716,63 @@ export default function Admin() {
             </div>
 
             {uploadTab === "employees" && (
+              <>
+              {!isReadOnly && (
+                <Card className="mb-6">
+                  <CardHeader><CardTitle>Добавить МП вручную</CardTitle></CardHeader>
+                  <CardContent>
+                    <form onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!employeeDraft.firstName.trim() || !employeeDraft.lastName.trim() || createEmployeeMutation.isPending) return;
+                      createEmployeeMutation.mutate();
+                    }}>
+                      <fieldset disabled={createEmployeeMutation.isPending} className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          {([
+                            ["lastName", "Фамилия", true],
+                            ["firstName", "Имя", true],
+                            ["middleName", "Отчество", false],
+                            ["email", "E-mail", false],
+                            ["phone", "Телефон", false],
+                          ] as const).map(([key, label, required]) => (
+                            <div key={key}>
+                              <Label htmlFor={`mp-${key}`}>{label}{required ? " *" : ""}</Label>
+                              <Input id={`mp-${key}`} className="mt-1" required={required}
+                                type={key === "email" ? "email" : key === "phone" ? "tel" : "text"}
+                                value={employeeDraft[key]}
+                                onChange={(event) => setEmployeeDraft((draft) => ({ ...draft, [key]: event.target.value }))} />
+                            </div>
+                          ))}
+                          <div>
+                            <Label htmlFor="mp-city">Город</Label>
+                            <select id="mp-city" className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                              value={employeeDraft.cityId} disabled={citiesLoading}
+                              onChange={(event) => setEmployeeDraft((draft) => ({ ...draft, cityId: event.target.value }))}>
+                              <option value="">Без города</option>
+                              {allCities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor="mp-manager">Менеджер</Label>
+                            <select id="mp-manager" className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                              value={employeeDraft.managerId} disabled={managersLoading}
+                              onChange={(event) => setEmployeeDraft((draft) => ({ ...draft, managerId: event.target.value }))}>
+                              <option value="">Без менеджера</option>
+                              {allManagers.filter((manager) => manager.role === "manager").map((manager) => (
+                                <option key={manager.id} value={manager.id}>{[manager.lastName, manager.firstName, manager.middleName].filter(Boolean).join(" ") || manager.username}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">* Обязательные поля. Чтобы МП появился у менеджера, выберите его в форме.</p>
+                        <Button type="submit" disabled={!employeeDraft.firstName.trim() || !employeeDraft.lastName.trim()}>
+                          {createEmployeeMutation.isPending ? "Добавляю…" : "Добавить МП"}
+                        </Button>
+                      </fieldset>
+                    </form>
+                  </CardContent>
+                </Card>
+              )}
               <Card className="mb-6">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
@@ -738,6 +815,7 @@ export default function Admin() {
                   </Button>
                 </CardContent>
               </Card>
+              </>
             )}
             {uploadTab === "cities" && (
               <Card className="mb-6">
