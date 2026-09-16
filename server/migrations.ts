@@ -2,6 +2,8 @@ import { pool } from "./db";
 
 export async function runDatabaseMigrations(): Promise<void> {
   await pool.query(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_time_zone text;
+
     ALTER TABLE activities
       ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'created',
       ADD COLUMN IF NOT EXISTS reviewed_by varchar,

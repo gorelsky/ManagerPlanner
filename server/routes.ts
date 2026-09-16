@@ -14,8 +14,6 @@ import {
   ACTIVITY_STATUSES,
 } from "@shared/schema";
 import { z } from "zod";
-import { format } from "date-fns";
-import { ru } from "date-fns/locale";
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
@@ -932,7 +930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formatted = messages.map((message) => ({
         ...message,
         createdAt: message.createdAt
-          ? format(message.createdAt, "'отправлено' dd.MM.yyyy 'в' HH:mm", { locale: ru })
+          ? message.createdAt.toISOString()
           : null,
       }));
       res.json(formatted);
@@ -952,7 +950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const formatted = {
         ...message,
         createdAt: message.createdAt
-          ? format(message.createdAt, "'отправлено' dd.MM.yyyy 'в' HH:mm", { locale: ru })
+          ? message.createdAt.toISOString()
           : null,
       };
       res.status(201).json(formatted);

@@ -10,6 +10,7 @@ import SideMenu from "@/components/side-menu";
 import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { formatChatTime } from "@/lib/chat-time";
 import type { MessageWithDetails, InsertMessage } from "@shared/schema";
 
 type ChatMessage = Omit<MessageWithDetails, "createdAt"> & {
@@ -85,6 +86,7 @@ export default function Chat() {
       senderId: user.id,
       receiverId: null,
       content: messageText.trim(),
+      senderTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
 
     sendMessageMutation.mutate(message);
@@ -199,7 +201,7 @@ export default function Chat() {
     isOwnMessage ? "text-blue-300" : "text-muted-foreground"
   }`}
 >
-  {message.createdAt ?? ""}
+  {formatChatTime(message.createdAt, message.senderTimeZone)}
 </p>
                       </div>
                     </div>

@@ -175,6 +175,7 @@ export const messages = pgTable(
     senderId: varchar("sender_id").notNull().references(() => users.id),
     receiverId: varchar("receiver_id").references(() => users.id),
     content: text("content").notNull(),
+    senderTimeZone: text("sender_time_zone"),
     isRead: boolean("is_read").default(false),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow(),
   },
@@ -409,7 +410,12 @@ export const updateActivitySchema = z.object({
   status: z.enum(["planned", "in_progress", "completed", "cancelled", "rescheduled"]).optional(),
 });
 
-export const insertMessageSchema = createInsertSchema(messages).omit({
+export const insertMessageSchema = createInsertSchema(messages, {
+  senderTimeZone: z.string().max(100).refine((zone) => {
+    try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; }
+    catch { return false; }
+  }, "Некорректный часовой пояс").nullable().optional(),
+}).omit({
   id: true,
   createdAt: true,
 });

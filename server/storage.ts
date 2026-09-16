@@ -1235,6 +1235,7 @@ export class DatabaseStorage implements IStorage {
         senderId: messages.senderId,
         receiverId: messages.receiverId,
         content: messages.content,
+        senderTimeZone: messages.senderTimeZone,
         isRead: messages.isRead,
         createdAt: messages.createdAt,
         sender: {
@@ -1266,6 +1267,7 @@ export class DatabaseStorage implements IStorage {
       senderId: row.senderId,
       receiverId: row.receiverId,
       content: row.content,
+      senderTimeZone: row.senderTimeZone,
       isRead: row.isRead,
       createdAt: row.createdAt,
       sender: row.sender,
@@ -1274,7 +1276,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<MessageWithDetails> {
-    const [message] = await db.insert(messages).values(insertMessage).returning();
+    const [message] = await db.insert(messages).values({ ...insertMessage, createdAt: new Date() }).returning();
     const [sender] = await db
       .select({
         id: users.id,
@@ -1296,6 +1298,7 @@ export class DatabaseStorage implements IStorage {
       senderId: message.senderId,
       receiverId: message.receiverId,
       content: message.content,
+      senderTimeZone: message.senderTimeZone,
       isRead: message.isRead,
       createdAt: message.createdAt,
       sender,
