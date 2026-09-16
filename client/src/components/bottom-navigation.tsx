@@ -2,10 +2,20 @@ import { Link, useLocation } from "wouter";
 import { PenTool, BarChart3, Users, MessageCircle, Settings, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function BottomNavigation() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { data: unread } = useQuery<{ count: number }>({
+    queryKey: ["/api/messages/unread-count", user?.id],
+    queryFn: async () => (await apiRequest("GET", "/api/messages/unread-count")).json(),
+    enabled: !!user,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  });
 
   const navItems = [];
 
@@ -124,7 +134,15 @@ export default function BottomNavigation() {
               )}
               data-testid={testId}
             >
-              <Icon className="w-5 h-5" />
+              <span className="relative">
+                <Icon className="w-5 h-5" />
+                {path === "/chat" && (unread?.count ?? 0) > 0 && (
+                  <span className="absolute -right-3 -top-2 min-w-4 rounded-full bg-red-600 px-1 text-center text-[10px] font-bold leading-4 text-white"
+                    role="status" aria-label={`Непрочитанных сообщений: ${unread!.count}`}>
+                    {unread!.count > 99 ? "99+" : unread!.count}
+                  </span>
+                )}
+              </span>
               <span className="max-w-full truncate text-[11px] font-semibold">{label}</span>
             </button>
           </Link>

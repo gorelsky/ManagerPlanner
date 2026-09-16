@@ -9,6 +9,7 @@ import {
   numeric,
   index,
   unique,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -183,6 +184,19 @@ export const messages = pgTable(
     senderIdx: index("messages_sender_idx").on(table.senderId),
     receiverIdx: index("messages_receiver_idx").on(table.receiverId),
     createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
+  }),
+);
+
+export const messageReads = pgTable(
+  "message_reads",
+  {
+    messageId: varchar("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.messageId, table.userId] }),
+    userIdx: index("message_reads_user_idx").on(table.userId),
   }),
 );
 

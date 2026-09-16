@@ -920,6 +920,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ----- Маршруты для сообщений -----
+  app.get("/api/messages/unread-count", requireManagerOrAdmin, async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ count: await storage.getUnreadMessageCount(req.user!.id) });
+    } catch (error) {
+      console.error("Unread message count error:", error);
+      res.status(500).json({ message: "Не удалось получить число непрочитанных сообщений" });
+    }
+  });
+
   app.get("/api/messages/:userId", requireManagerOrAdmin, async (req, res) => {
     try {
       if (req.params.userId !== req.user?.id) {
@@ -965,7 +975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/messages/:messageId/read", requireManagerOrAdmin, async (req, res) => {
     try {
-      await storage.markMessageAsRead(req.params.messageId);
+      await storage.markMessageAsRead(req.params.messageId, req.user!.id);
       res.status(204).send();
     } catch (error) {
       console.error("Mark message as read error:", error);

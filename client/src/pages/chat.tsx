@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,12 +53,43 @@ export default function Chat() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const chatRef = useRef<HTMLDivElement>(null);
+  const pendingReads = useRef(new Set<string>());
 
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ["/api/messages", user?.id],
     queryFn: () => messageApi.getMessages(user!.id),
     enabled: !!user?.id,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!user) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (document.visibilityState !== "visible") return;
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.unreadMessage;
+        if (!entry.isIntersecting || !id || pendingReads.current.has(id)) continue;
+        pendingReads.current.add(id);
+        void messageApi.markAsRead(id).then(() => {
+          queryClient.setQueryData<ChatMessage[]>(["/api/messages", user.id], (items) =>
+            items?.map((item) => item.id === id ? { ...item, isRead: true } : item));
+          queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-count", user.id] });
+        }).catch(() => undefined).finally(() => pendingReads.current.delete(id));
+      }
+    }, { threshold: 0.1 });
+    const observe = () => {
+      observer.disconnect();
+      if (document.visibilityState === "visible") {
+        chatRef.current?.querySelectorAll("[data-unread-message]").forEach((element) => observer.observe(element));
+      }
+    };
+    observe();
+    document.addEventListener("visibilitychange", observe);
+    return () => { observer.disconnect(); document.removeEventListener("visibilitychange", observe); };
+  }, [messages, user?.id, queryClient]);
 
   const sendMessageMutation = useMutation({
     mutationFn: messageApi.createMessage,
@@ -135,7 +166,7 @@ export default function Chat() {
 
         {/* Messages: прокручиваются только внутри этой области */}
         <ScrollArea className="flex-1 min-h-0 px-3 sm:px-6 lg:px-10">
-          <div className="space-y-4 py-4 w-full">
+          <div ref={chatRef} className="space-y-4 py-4 w-full">
             {messages.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -154,6 +185,7 @@ export default function Chat() {
                 return (
                   <div
                     key={message.id}
+                    data-unread-message={!isOwnMessage && !message.isRead ? message.id : undefined}
                     className={`flex ${
                       isOwnMessage ? "justify-end" : "justify-start"
                     } gap-2`}

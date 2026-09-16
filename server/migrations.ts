@@ -3,6 +3,13 @@ import { pool } from "./db";
 export async function runDatabaseMigrations(): Promise<void> {
   await pool.query(`
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_time_zone text;
+    CREATE TABLE IF NOT EXISTS message_reads (
+      message_id varchar NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      user_id varchar NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      read_at timestamptz NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (message_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS message_reads_user_idx ON message_reads(user_id);
 
     ALTER TABLE activities
       ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'created',

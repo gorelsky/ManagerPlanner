@@ -126,7 +126,8 @@ export interface IStorage {
   // Messages
   getMessages(userId: string): Promise<MessageWithDetails[]>;
   createMessage(message: InsertMessage): Promise<MessageWithDetails>;
-  markMessageAsRead(messageId: string): Promise<void>;
+  markMessageAsRead(messageId: string, userId: string): Promise<void>;
+  getUnreadMessageCount(userId: string): Promise<number>;
 
   // Holidays
   getHolidaysByYear(year: number): Promise<Holiday[]>;
@@ -1236,7 +1237,7 @@ export class DatabaseStorage implements IStorage {
         receiverId: messages.receiverId,
         content: messages.content,
         senderTimeZone: messages.senderTimeZone,
-        isRead: messages.isRead,
+        isRead: sql<boolean>`EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = ${messages.id} AND r.user_id = ${userId})`,
         createdAt: messages.createdAt,
         sender: {
           id: users.id,
@@ -1306,11 +1307,24 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async markMessageAsRead(messageId: string): Promise<void> {
-    await db
-      .update(messages)
-      .set({ isRead: true })
-      .where(eq(messages.id, messageId));
+  async markMessageAsRead(messageId: string, userId: string): Promise<void> {
+    await db.execute(sql`
+      INSERT INTO message_reads (message_id, user_id)
+      SELECT id, ${userId} FROM messages
+      WHERE id = ${messageId} AND sender_id <> ${userId}
+        AND (receiver_id IS NULL OR receiver_id = ${userId})
+      ON CONFLICT DO NOTHING
+    `);
+  }
+
+  async getUnreadMessageCount(userId: string): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT count(*)::integer AS count FROM messages m
+      WHERE m.sender_id <> ${userId}
+        AND (m.receiver_id IS NULL OR m.receiver_id = ${userId})
+        AND NOT EXISTS (SELECT 1 FROM message_reads r WHERE r.message_id = m.id AND r.user_id = ${userId})
+    `);
+    return Number(result.rows[0]?.count ?? 0);
   }
 
   /* === Holidays === */
