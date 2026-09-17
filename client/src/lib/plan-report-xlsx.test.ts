@@ -65,3 +65,16 @@ test("создаёт оформленный и подготовленный к �
   assert.equal(sheet.views[0]?.state, "frozen");
   assert.equal(sheet.getCell("H6").fill.type, "pattern");
 });
+
+test("выгружает часы ТМ без пересчёта в часовой пояс компьютера", async () => {
+  const workbook = await createPlanReportWorkbook([{
+    ...activities[0], planningTimeZone: "Asia/Novosibirsk",
+    startDate: new Date("2026-09-17T02:00:00Z"),
+    endDate: new Date("2026-09-17T11:00:00Z"),
+  }], { periodLabel: "сентябрь 2026" });
+  const restored = new ExcelJS.Workbook();
+  await restored.xlsx.load(await workbook.xlsx.writeBuffer());
+  const sheet = restored.getWorksheet("Планы ТМ")!;
+  assert.equal((sheet.getCell("B6").value as Date).toISOString(), "2026-09-17T09:00:00.000Z");
+  assert.equal((sheet.getCell("C6").value as Date).toISOString(), "2026-09-17T18:00:00.000Z");
+});

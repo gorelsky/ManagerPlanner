@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { planningDate } from "@shared/planning-time";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
@@ -137,8 +138,8 @@ export default function Analytics() {
 
 
       const completedForDay = activities.filter((a) => {
-        const activityStart = new Date(a.startDate);
-        const activityEnd = new Date(a.endDate);
+        const activityStart = planningDate(a.startDate, a.planningTimeZone);
+        const activityEnd = planningDate(a.endDate, a.planningTimeZone);
         return (
           a.status === "completed" &&
           activityStart <= dayEnd &&

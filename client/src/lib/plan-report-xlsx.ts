@@ -1,4 +1,5 @@
 import type { ActivityWithDetails, ApprovalStatus } from "@shared/schema";
+import { planningExcelDate } from "@shared/planning-time";
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "Запланировано",
@@ -56,9 +57,9 @@ function formatPersonName(person?: {
   );
 }
 
-function safeDate(value: Date | string): Date | string {
+function safeDate(value: Date | string, timeZone?: string | null): Date | string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? safeText(String(value)) : date;
+  return Number.isNaN(date.getTime()) ? safeText(String(value)) : planningExcelDate(value, timeZone);
 }
 
 export async function createPlanReportWorkbook(
@@ -162,8 +163,8 @@ export async function createPlanReportWorkbook(
   activities.forEach((activity, index) => {
     const row = sheet.addRow({
       number: index + 1,
-      startDate: safeDate(activity.startDate),
-      endDate: safeDate(activity.endDate),
+      startDate: safeDate(activity.startDate, activity.planningTimeZone),
+      endDate: safeDate(activity.endDate, activity.planningTimeZone),
       manager: safeText(activity.managerName || "—"),
       type: safeText(activity.type?.name || "—"),
       city: safeText(activity.city?.name || "—"),

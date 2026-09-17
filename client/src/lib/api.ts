@@ -1,4 +1,5 @@
 import { apiRequest } from "./queryClient";
+import { planningBoundary } from "@shared/planning-time";
 import type {
   PublicUser,
   AuthenticatedUser,
@@ -168,8 +169,8 @@ export const activityApi = {
     endDate?: Date,
   ): Promise<ActivityWithDetails[]> => {
     const params = new URLSearchParams();
-    if (startDate) params.append("startDate", startDate.toISOString());
-    if (endDate) params.append("endDate", endDate.toISOString());
+    if (startDate) params.append("startDate", planningBoundary(startDate));
+    if (endDate) params.append("endDate", planningBoundary(endDate));
 
     const url = `/api/activities/all${
       params.toString() ? `?${params.toString()}` : ""
@@ -182,8 +183,8 @@ getActivitiesByUser: async (
   params?: { startDate?: string; endDate?: string },
 ): Promise<ActivityWithDetails[]> => {
   const search = new URLSearchParams();
-  if (params?.startDate) search.set("startDate", params.startDate);
-  if (params?.endDate) search.set("endDate", params.endDate);
+  if (params?.startDate) search.set("startDate", planningBoundary(params.startDate));
+  if (params?.endDate) search.set("endDate", planningBoundary(params.endDate));
 
   const url =
     search.toString().length > 0
@@ -227,6 +228,7 @@ updateActivity: async (
     description,
     startDate,
     endDate,
+    planningTimeZone,
     status,
   } = activity;
 
@@ -240,6 +242,7 @@ updateActivity: async (
   if (description !== undefined) payload.description = description;
   if (startDate) payload.startDate = startDate;
   if (endDate) payload.endDate = endDate;
+  if (planningTimeZone) payload.planningTimeZone = planningTimeZone;
   if (status) payload.status = status;
 
   const res = await apiRequest("PATCH", `/api/activities/${id}`, payload);
@@ -309,8 +312,8 @@ updateActivity: async (
     endDate: Date,
   ): Promise<ActivityCalendarStats> => {
     const params = new URLSearchParams();
-    params.append("startDate", startDate.toISOString());
-    params.append("endDate", endDate.toISOString());
+    params.append("startDate", planningBoundary(startDate));
+    params.append("endDate", planningBoundary(endDate));
 
     const url = `/api/activities/calendar/user/${userId}?${params.toString()}`;
     return apiRequest("GET", url).then((res) => res.json());

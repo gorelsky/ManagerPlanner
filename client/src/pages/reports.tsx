@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { planningDate } from "@shared/planning-time";
 import { useQuery } from "@tanstack/react-query";
 import { activityApi, employeeApi } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
@@ -92,8 +93,8 @@ export default function Reports() {
     : getWeekRange(weekStart);
 
   const activitiesInRange: ActivityWithDetails[] = allActivities.filter((a) => {
-    const activityStart = new Date(a.startDate);
-    const activityEnd = new Date(a.endDate);
+    const activityStart = planningDate(a.startDate, a.planningTimeZone);
+    const activityEnd = planningDate(a.endDate, a.planningTimeZone);
     return activityStart <= range.end && activityEnd >= range.start;
   });
 

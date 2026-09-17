@@ -143,6 +143,7 @@ export const activities = pgTable(
     description: text("description"),
     startDate: timestamp("start_date").notNull(),
     endDate: timestamp("end_date").notNull(),
+    planningTimeZone: text("planning_time_zone"),
     status: text("status").$type<ActivityStatus>()
       .notNull()
       .default("planned"),
@@ -388,7 +389,13 @@ export const insertActivityTypeSchema = createInsertSchema(activityTypes).omit({
   id: true,
 });
 
+const planningTimeZoneSchema = z.string().max(100).refine((zone) => {
+  try { new Intl.DateTimeFormat("en", { timeZone: zone }); return true; }
+  catch { return false; }
+}, "Некорректный часовой пояс").nullable().optional();
+
 export const insertActivitySchema = createInsertSchema(activities, {
+  planningTimeZone: planningTimeZoneSchema,
   status: z.enum(ACTIVITY_STATUSES).default("planned"),
 })
   .omit({
@@ -421,6 +428,7 @@ export const updateActivitySchema = z.object({
   description: z.string().optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  planningTimeZone: planningTimeZoneSchema,
   status: z.enum(["planned", "in_progress", "completed", "cancelled", "rescheduled"]).optional(),
 });
 

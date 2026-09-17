@@ -2,6 +2,18 @@ import { pool } from "./db";
 
 export async function runDatabaseMigrations(): Promise<void> {
   await pool.query(`
+    ALTER TABLE activities ADD COLUMN IF NOT EXISTS planning_time_zone text;
+    -- Restore legacy plans using the manager's home city, not the visit city.
+    -- Do not shift timestamps or overwrite a zone captured when the plan was entered.
+    UPDATE activities a SET planning_time_zone = CASE c.name
+      WHEN 'Новосибирск' THEN 'Asia/Novosibirsk'
+      WHEN 'Казань' THEN 'Europe/Moscow'
+      WHEN 'Ростов-на-Дону' THEN 'Europe/Moscow'
+    END
+    FROM users u JOIN cities c ON c.id = u.city_id
+    WHERE a.user_id = u.id AND a.planning_time_zone IS NULL
+      AND c.name IN ('Новосибирск', 'Казань', 'Ростов-на-Дону');
+
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_time_zone text;
     CREATE TABLE IF NOT EXISTS message_reads (
       message_id varchar NOT NULL REFERENCES messages(id) ON DELETE CASCADE,

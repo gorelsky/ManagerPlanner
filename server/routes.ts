@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import { storage } from "./storage";
 import { runDatabaseMigrations } from "./migrations";
+import { planningExcelDate } from "@shared/planning-time";
 import {
   insertUserSchema,
   insertCitySchema,
@@ -752,13 +753,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/activities", requirePlanEditor, async (req, res) => {
     try {
       const body = parseDateFields(req.body, ["startDate", "endDate"]);
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const startDate = new Date(body.startDate);
-      startDate.setHours(0, 0, 0, 0);
-      if (startDate < now) {
-        return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
-      }
       if (body.startDate && body.endDate && body.startDate >= body.endDate) {
         return res.status(400).json({ message: "Дата окончания должна быть позже даты начала" });
       }
@@ -767,6 +761,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user?.role === "manager" ? req.user.id : body.userId,
         status: "planned",
       });
+      const today = planningExcelDate(new Date(), activityData.planningTimeZone);
+      today.setUTCHours(0, 0, 0, 0);
+      const startDay = planningExcelDate(activityData.startDate, activityData.planningTimeZone);
+      startDay.setUTCHours(0, 0, 0, 0);
+      if (startDay < today) {
+        return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
+      }
       const activity = await storage.createActivity(activityData);
       res.status(201).json(activity);
     } catch (error) {

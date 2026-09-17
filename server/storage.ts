@@ -36,6 +36,7 @@ import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
+import { planningExcelDate } from "@shared/planning-time";
 import {
   getLatestAllowedPlanWeek,
   parsePlanPerformanceWeek,
@@ -894,8 +895,8 @@ export class DatabaseStorage implements IStorage {
     endDate?: Date,
   ): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [eq(activities.userId, userId)];
-    if (startDate) conditions.push(gte(activities.endDate, startDate));
-    if (endDate) conditions.push(lte(activities.startDate, endDate));
+    if (startDate) conditions.push(sql`(${activities.endDate} AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(${activities.planningTimeZone}, 'UTC')) >= ${startDate.toISOString().slice(0, -1)}::timestamp`);
+    if (endDate) conditions.push(sql`(${activities.startDate} AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(${activities.planningTimeZone}, 'UTC')) <= ${endDate.toISOString().slice(0, -1)}::timestamp`);
     return this.queryActivities(conditions);
   }
 
@@ -906,8 +907,8 @@ export class DatabaseStorage implements IStorage {
     offset?: number,
   ): Promise<ActivityWithDetails[]> {
     const conditions: any[] = [];
-    if (startDate) conditions.push(gte(activities.endDate, startDate));
-    if (endDate) conditions.push(lte(activities.startDate, endDate));
+    if (startDate) conditions.push(sql`(${activities.endDate} AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(${activities.planningTimeZone}, 'UTC')) >= ${startDate.toISOString().slice(0, -1)}::timestamp`);
+    if (endDate) conditions.push(sql`(${activities.startDate} AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(${activities.planningTimeZone}, 'UTC')) <= ${endDate.toISOString().slice(0, -1)}::timestamp`);
     return this.queryActivities(conditions, limit, offset);
   }
 
@@ -926,19 +927,7 @@ export class DatabaseStorage implements IStorage {
     }>
   > {
     // Получаем активности, пересекающие период
-    const overlappingActivities = await db
-      .select({
-        startDate: activities.startDate,
-        endDate: activities.endDate,
-        status: activities.status,
-      })
-      .from(activities)
-      .where(
-        and(
-          eq(activities.userId, userId),
-          sql`${activities.startDate} < ${endDate} AND ${startDate} < ${activities.endDate}`,
-        ),
-      );
+    const overlappingActivities = await this.getActivitiesByUser(userId, startDate, endDate);
 
     const result: Array<{
       date: string;
@@ -950,15 +939,15 @@ export class DatabaseStorage implements IStorage {
     }> = [];
 
     const current = new Date(startDate);
-    current.setHours(0, 0, 0, 0);
+    current.setUTCHours(0, 0, 0, 0);
     const periodEnd = new Date(endDate);
-    periodEnd.setHours(23, 59, 59, 999);
+    periodEnd.setUTCHours(23, 59, 59, 999);
 
     while (current <= periodEnd) {
       const dayStart = new Date(current);
-      dayStart.setHours(0, 0, 0, 0);
+      dayStart.setUTCHours(0, 0, 0, 0);
       const dayEnd = new Date(current);
-      dayEnd.setHours(23, 59, 59, 999);
+      dayEnd.setUTCHours(23, 59, 59, 999);
 
       let planned = 0;
       let inProgress = 0;
@@ -967,8 +956,8 @@ export class DatabaseStorage implements IStorage {
       let rescheduled = 0;
 
       for (const activity of overlappingActivities) {
-        const aStart = activity.startDate;
-        const aEnd = activity.endDate;
+        const aStart = planningExcelDate(activity.startDate, activity.planningTimeZone || "UTC");
+        const aEnd = planningExcelDate(activity.endDate, activity.planningTimeZone || "UTC");
         if (aStart < dayEnd && aEnd >= dayStart) {
           switch (activity.status) {
             case "planned": planned++; break;
@@ -989,7 +978,7 @@ export class DatabaseStorage implements IStorage {
         rescheduled,
       });
 
-      current.setDate(current.getDate() + 1);
+      current.setUTCDate(current.getUTCDate() + 1);
     }
 
     return result;
@@ -1036,6 +1025,7 @@ export class DatabaseStorage implements IStorage {
         description: activities.description,
         startDate: activities.startDate,
         endDate: activities.endDate,
+        planningTimeZone: activities.planningTimeZone,
         status: activities.status,
         approvalStatus: activities.approvalStatus,
         reviewedBy: activities.reviewedBy,
@@ -1086,6 +1076,7 @@ export class DatabaseStorage implements IStorage {
         description: activities.description,
         startDate: activities.startDate,
         endDate: activities.endDate,
+        planningTimeZone: activities.planningTimeZone,
         status: activities.status,
         approvalStatus: activities.approvalStatus,
         reviewedBy: activities.reviewedBy,

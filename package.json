@@ -11,6 +11,7 @@
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
+    "test:planning-time": "esbuild shared/planning-time.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/planning-time.test.mjs && cross-env TZ=UTC node --test .local/tests/planning-time.test.mjs && cross-env TZ=Europe/Moscow node --test .local/tests/planning-time.test.mjs && cross-env TZ=Asia/Novosibirsk node --test .local/tests/planning-time.test.mjs",
     "test:passwords": "esbuild server/passwords.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/passwords.test.mjs && node --test .local/tests/passwords.test.mjs",
     "test:plan-report": "esbuild client/src/lib/plan-report-xlsx.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/plan-report-xlsx.test.mjs && node --test .local/tests/plan-report-xlsx.test.mjs",
     "test:plan-performance": "esbuild server/plan-performance.test.ts --bundle --platform=node --packages=external --format=esm --outfile=.local/tests/plan-performance.test.mjs && node --test .local/tests/plan-performance.test.mjs",

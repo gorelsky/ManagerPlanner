@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { planningDate } from "@shared/planning-time";
 import { ru } from "date-fns/locale";
 import { MapPin, Clock, Check, Edit, X, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,8 +74,8 @@ export default function ActivityCard({
               )}
               data-testid="activity-time"
             >
-              {format(new Date(activity.startDate), "dd.MMM.yyyy, HH:mm", { locale: ru })} -{" "}
-              {format(new Date(activity.endDate), "dd.MMM.yyyy, HH:mm", { locale: ru })}
+              {format(planningDate(activity.startDate, activity.planningTimeZone), "dd.MMM.yyyy, HH:mm", { locale: ru })} -{" "}
+              {format(planningDate(activity.endDate, activity.planningTimeZone), "dd.MMM.yyyy, HH:mm", { locale: ru })}
             </span>
             <span className={cn("px-2 py-1 rounded text-xs font-medium", status.className)} data-testid="activity-status">
               {status.label}
@@ -103,7 +104,7 @@ export default function ActivityCard({
             <span data-testid="activity-location"><MapPin className="w-3 h-3 inline mr-1" />{activity.city.name}</span>
             <span data-testid="activity-duration">
               <Clock className="w-3 h-3 inline mr-1" />
-              {format(new Date(activity.startDate), "HH:mm", { locale: ru })} - {format(new Date(activity.endDate), "HH:mm", { locale: ru })}
+              {format(planningDate(activity.startDate, activity.planningTimeZone), "HH:mm", { locale: ru })} - {format(planningDate(activity.endDate, activity.planningTimeZone), "HH:mm", { locale: ru })}
             </span>
           </div>
           {activity.employee && (
@@ -148,7 +149,7 @@ export default function ActivityCard({
                   )}
                   onClick={() => canComplete && onMarkComplete(activity.id)}
                   disabled={!canComplete}
-                  title={canComplete ? "Отметить план выполненным" : `Можно выполнить после ${format(endDateTime, "dd.MMM.yyyy HH:mm", { locale: ru })}`}
+                  title={canComplete ? "Отметить план выполненным" : `Можно выполнить после ${format(planningDate(activity.endDate, activity.planningTimeZone), "dd.MMM.yyyy HH:mm", { locale: ru })}`}
                   data-testid="button-mark-complete"
                 >
                   <Check className="w-5 h-5" />

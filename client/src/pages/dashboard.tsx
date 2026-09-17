@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { planningDate } from "@shared/planning-time";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
@@ -278,7 +279,7 @@ export default function Dashboard() {
   const groupedActivities = useMemo(() => {
     if (!isPrivileged || groupBy === "date") {
       return filteredActivities.reduce((groups, a) => {
-        const key = format(new Date(a.startDate), "yyyy-MM-dd");
+        const key = format(planningDate(a.startDate, a.planningTimeZone), "yyyy-MM-dd");
         if (!groups[key]) groups[key] = [];
         groups[key].push(a);
         return groups;
@@ -316,8 +317,8 @@ export default function Dashboard() {
   const privilegedCalendarMap = useMemo(() => {
     const map: Record<string, CalendarStats> = {};
     for (const a of filteredActivities) {
-      const activityStart = new Date(a.startDate);
-      const activityEnd = new Date(a.endDate);
+      const activityStart = planningDate(a.startDate, a.planningTimeZone);
+      const activityEnd = planningDate(a.endDate, a.planningTimeZone);
       activityStart.setHours(0, 0, 0, 0);
       activityEnd.setHours(0, 0, 0, 0);
 

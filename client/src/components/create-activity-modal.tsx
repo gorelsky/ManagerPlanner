@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { planningDate, planningInstant } from "@shared/planning-time";
 import { useForm } from "react-hook-form";
 import { Clock } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -135,12 +136,8 @@ export default function CreateActivityModal({
   useEffect(() => {
     if (activityToEdit) {
       // Преобразуем даты в объекты Date, если они ещё не Date
-      const start = activityToEdit.startDate instanceof Date
-        ? activityToEdit.startDate
-        : new Date(activityToEdit.startDate);
-      const end = activityToEdit.endDate instanceof Date
-        ? activityToEdit.endDate
-        : new Date(activityToEdit.endDate);
+      const start = planningDate(activityToEdit.startDate, activityToEdit.planningTimeZone);
+      const end = planningDate(activityToEdit.endDate, activityToEdit.planningTimeZone);
 
       // Проверка на валидность – если дата невалидная, используем сегодня
       const safeStart = isNaN(start.getTime()) ? new Date() : start;
@@ -178,14 +175,18 @@ export default function CreateActivityModal({
   }, [activityToEdit, userId, form]);
 
   const onSubmit = (data: FormData) => {
-    const [startHour, startMinute] = data.startTime.split(":").map(Number);
-    const [endHour, endMinute] = data.endTime.split(":").map(Number);
-
-    const startDateTime = new Date(data.startDate);
-    startDateTime.setHours(startHour, startMinute, 0, 0);
-
-    const endDateTime = new Date(data.endDate);
-    endDateTime.setHours(endHour, endMinute, 0, 0);
+    const planningTimeZone = activityToEdit
+      ? activityToEdit.planningTimeZone || "UTC"
+      : Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let startDateTime: Date;
+    let endDateTime: Date;
+    try {
+      startDateTime = planningInstant(data.startDate, data.startTime, planningTimeZone);
+      endDateTime = planningInstant(data.endDate, data.endTime, planningTimeZone);
+    } catch (error) {
+      toast({ title: "Ошибка времени", description: (error as Error).message, variant: "destructive" });
+      return;
+    }
 
     if (endDateTime.getTime() < startDateTime.getTime()) {
       toast({
@@ -196,7 +197,7 @@ export default function CreateActivityModal({
       return;
     }
 
-    const today = new Date();
+    const today = planningDate(new Date(), planningTimeZone);
     today.setHours(0, 0, 0, 0);
     const selectedStart = new Date(data.startDate);
     selectedStart.setHours(0, 0, 0, 0);
@@ -222,6 +223,7 @@ export default function CreateActivityModal({
       description: data.description,
       startDate: startDateTime,
       endDate: endDateTime,
+      planningTimeZone,
       status: data.status,
     };
 

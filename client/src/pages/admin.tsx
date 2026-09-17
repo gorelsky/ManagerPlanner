@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { planningDate } from "@shared/planning-time";
 import * as XLSX from "xlsx";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Upload, Download, Users, Settings, Trash2, MapPin, CalendarDays, LogIn, Clock3, TestTube2 } from "lucide-react";
@@ -188,7 +189,7 @@ export default function Admin() {
     dayEnd.setHours(23, 59, 59, 999);
 
     const activitiesForDay = allActivities.filter((activity) => {
-      const start = new Date(activity.startDate);
+      const start = planningDate(activity.startDate, activity.planningTimeZone);
       return start >= dayStart && start <= dayEnd;
     });
 
@@ -1526,8 +1527,9 @@ export default function Admin() {
                                         </p>
                                         <p className="text-sm text-muted-foreground">
                                           {activity.city?.name} •{" "}
-                                          {new Date(
+                                          {planningDate(
                                             activity.startDate,
+                                            activity.planningTimeZone,
                                           ).toLocaleString("ru-RU", {
                                             day: "2-digit",
                                             month: "2-digit",
@@ -1536,8 +1538,9 @@ export default function Admin() {
                                             minute: "2-digit",
                                           })}{" "}
                                           —{" "}
-                                          {new Date(
+                                          {planningDate(
                                             activity.endDate,
+                                            activity.planningTimeZone,
                                           ).toLocaleString("ru-RU", {
                                             day: "2-digit",
                                             month: "2-digit",
