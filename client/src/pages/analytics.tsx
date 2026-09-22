@@ -11,11 +11,12 @@ import {
   Cell,
 } from "recharts";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import SideMenu from "@/components/side-menu";
 import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
-import { activityApi, holidaysApi } from "@/lib/api";
+import { activityApi, analyticsApi, holidaysApi } from "@/lib/api";
 import {
   startOfWeek,
   endOfWeek,
@@ -24,7 +25,10 @@ import {
   startOfQuarter,
   endOfQuarter,
   format,
+  addWeeks,
+  subWeeks,
 } from "date-fns";
+import { ru } from "date-fns/locale";
 
 
 type Period = "week" | "month" | "quarter";
@@ -32,6 +36,7 @@ type Period = "week" | "month" | "quarter";
 
 export default function Analytics() {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("week");
+  const [reportWeek, setReportWeek] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const { user } = useAuth();
   const canViewAllPlans =
     user?.role === "admin" ||
@@ -56,6 +61,104 @@ export default function Analytics() {
 
 
   const { start, end } = getPeriodDates(selectedPeriod);
+
+  const reportWeekStart = startOfWeek(reportWeek, { weekStartsOn: 1 });
+  const reportWeekEnd = endOfWeek(reportWeek, { weekStartsOn: 1 });
+  const { data: planEntryReport = [] } = useQuery({
+    queryKey: ["/api/analytics/plan-entry-report", reportWeekStart.toISOString(), reportWeekEnd.toISOString()],
+    queryFn: () => analyticsApi.getPlanEntryReport(reportWeekStart, reportWeekEnd),
+    enabled: canViewAllPlans,
+    refetchOnWindowFocus: true,
+  });
+  const planEntrySummary = Object.values(planEntryReport.reduce<Record<string, {
+    managerName: string;
+    managerUsername: string;
+    firstEntry: string | null;
+    lastEntry: string | null;
+    planCount: number;
+  }>>((summary, row) => {
+    const current = summary[row.managerId] || {
+      managerName: row.managerName,
+      managerUsername: row.managerUsername,
+      firstEntry: null,
+      lastEntry: null,
+      planCount: 0,
+    };
+    const timestamp = row.createdAt ? new Date(row.createdAt).getTime() : NaN;
+    if (Number.isFinite(timestamp)) {
+      const iso = new Date(timestamp).toISOString();
+      if (!current.firstEntry || iso < current.firstEntry) current.firstEntry = iso;
+      if (!current.lastEntry || iso > current.lastEntry) current.lastEntry = iso;
+    }
+    current.planCount += 1;
+    summary[row.managerId] = current;
+    return summary;
+  }, {})).sort((a, b) => (a.firstEntry || "").localeCompare(b.firstEntry || ""));
+
+  const downloadPlanEntryReport = async () => {
+    const { default: ExcelJS } = await import("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "ManagerPlanner";
+    const sheet = workbook.addWorksheet("Внесение планов", {
+      pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
+    sheet.columns = [
+      { header: "Менеджер", key: "manager", width: 28 },
+      { header: "Логин / e-mail", key: "username", width: 30 },
+      { header: "Начало внесения", key: "createdDate", width: 18 },
+      { header: "День начала", key: "createdDay", width: 16 },
+      { header: "Окончание внесения", key: "updatedDate", width: 18 },
+      { header: "День окончания", key: "updatedDay", width: 16 },
+      { header: "Планов внесено", key: "planCount", width: 16 },
+    ];
+    sheet.addRow({
+      manager: `Недельный срез: ${format(reportWeekStart, "dd.MM.yyyy")}–${format(reportWeekEnd, "dd.MM.yyyy")}`,
+    });
+    sheet.mergeCells("A1:G1");
+    sheet.getRow(1).font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF243A8F" } };
+    sheet.getRow(1).alignment = { horizontal: "center" };
+    sheet.spliceRows(2, 0, []);
+    sheet.addRow({
+      manager: "Менеджер",
+      username: "Логин / e-mail",
+      createdDate: "Начало внесения",
+      createdDay: "День недели",
+      updatedDate: "Окончание внесения",
+      updatedDay: "День недели",
+      planCount: "Планов внесено",
+    });
+    const header = sheet.getRow(3);
+    header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4F46E5" } };
+    header.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    planEntrySummary.forEach((row) => {
+      const created = row.firstEntry ? new Date(row.firstEntry) : null;
+      const updated = row.lastEntry ? new Date(row.lastEntry) : null;
+      sheet.addRow({
+        manager: row.managerName,
+        username: row.managerUsername,
+        createdDate: created ? format(created, "dd.MM.yyyy HH:mm") : "—",
+        createdDay: created ? format(created, "EEEE", { locale: ru }) : "—",
+        updatedDate: updated ? format(updated, "dd.MM.yyyy HH:mm") : "—",
+        updatedDay: updated ? format(updated, "EEEE", { locale: ru }) : "—",
+        planCount: row.planCount,
+      });
+    });
+    sheet.autoFilter = { from: "A3", to: "G3" };
+    sheet.eachRow((row, index) => {
+      if (index >= 4) row.alignment = { vertical: "top", wrapText: true };
+    });
+    sheet.pageSetup.printTitlesRow = "1:3";
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Отчет_внесения_планов_${format(reportWeekStart, "yyyy-MM-dd")}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
 
   // Для руководителей — общая аналитика, для менеджера — только собственная.
@@ -323,6 +426,65 @@ export default function Analytics() {
           </div>
         </div>
 
+
+        {/* Activity Types Breakdown */}
+        {canViewAllPlans && (
+          <div className="bg-muted rounded-lg p-4 mb-6" data-testid="plan-entry-report">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Внесение планов менеджерами</h4>
+                <p className="text-xs text-muted-foreground">
+                  Период: {format(reportWeekStart, "dd.MM.yyyy")} — {format(reportWeekEnd, "dd.MM.yyyy")}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" onClick={() => setReportWeek(subWeeks(reportWeekStart, 1))} aria-label="Предыдущая неделя">
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setReportWeek(startOfWeek(new Date(), { weekStartsOn: 1 }))}>Текущая неделя</Button>
+                <Button variant="outline" size="icon" onClick={() => setReportWeek(addWeeks(reportWeekStart, 1))} aria-label="Следующая неделя">
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button size="sm" onClick={downloadPlanEntryReport} disabled={planEntrySummary.length === 0}>
+                  <Download className="w-4 h-4 mr-1" /> Excel
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="py-2 pr-3">Менеджер</th>
+                    <th className="py-2 pr-3">Начало внесения</th>
+                    <th className="py-2 pr-3">День начала</th>
+                    <th className="py-2 pr-3">Окончание внесения</th>
+                    <th className="py-2 pr-3">День окончания</th>
+                    <th className="py-2">Планов</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planEntrySummary.map((row) => {
+                    const created = row.firstEntry ? new Date(row.firstEntry) : null;
+                    const updated = row.lastEntry ? new Date(row.lastEntry) : null;
+                    return (
+                      <tr key={row.managerUsername} className="border-b border-border/60 align-top">
+                        <td className="py-2 pr-3 font-medium">{row.managerName}<div className="text-muted-foreground">{row.managerUsername}</div></td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{created ? format(created, "dd.MM.yyyy HH:mm") : "—"}</td>
+                        <td className="py-2 pr-3">{created ? format(created, "EEEE", { locale: ru }) : "—"}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{updated ? format(updated, "dd.MM.yyyy HH:mm") : "—"}</td>
+                        <td className="py-2 pr-3">{updated ? format(updated, "EEEE", { locale: ru }) : "—"}</td>
+                        <td className="py-2">{row.planCount}</td>
+                      </tr>
+                    );
+                  })}
+                  {planEntrySummary.length === 0 && (
+                    <tr><td colSpan={6} className="py-5 text-center text-muted-foreground">За выбранную неделю планов не внесено.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Activity Types Breakdown */}
         <div className="space-y-3">

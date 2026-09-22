@@ -25,6 +25,19 @@ import type {
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
 export type ChatMessageWithUser = any;
 
+export type PlanEntryReportRow = {
+  activityId: string;
+  managerId: string;
+  managerName: string;
+  managerUsername: string;
+  planTitle: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  startDate: string;
+  endDate: string;
+  approvalStatus: string;
+};
+
 // Вспомогательные типы для календарной статистики
 type ActivityCalendarItem = {
   date: string;
@@ -317,6 +330,16 @@ updateActivity: async (
 
     const url = `/api/activities/calendar/user/${userId}?${params.toString()}`;
     return apiRequest("GET", url).then((res) => res.json());
+  },
+};
+
+export const analyticsApi = {
+  getPlanEntryReport: (startDate: Date, endDate: Date): Promise<PlanEntryReportRow[]> => {
+    const params = new URLSearchParams({
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
+    return apiRequest("GET", `/api/analytics/plan-entry-report?${params}`).then((res) => res.json());
   },
 };
 

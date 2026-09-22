@@ -99,6 +99,7 @@ export interface IStorage {
     limit?: number,
     offset?: number,
   ): Promise<ActivityWithDetails[]>;
+  getPlanEntryReport(startDate: Date, endDate: Date): Promise<PlanEntryReportRow[]>;
   getActivity(id: string): Promise<ActivityWithDetails | undefined>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
@@ -135,6 +136,19 @@ export interface IStorage {
   getAllHolidays(): Promise<Holiday[]>;
   importHolidaysFromCsv(csvData: string): Promise<{ imported: number }>;
 }
+
+export type PlanEntryReportRow = {
+  activityId: string;
+  managerId: string;
+  managerName: string;
+  managerUsername: string;
+  planTitle: string;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  startDate: Date;
+  endDate: Date;
+  approvalStatus: ApprovalStatus;
+};
 
 // Хеширование пароля
 async function hashPassword(password: string): Promise<string> {
@@ -1306,6 +1320,34 @@ export class DatabaseStorage implements IStorage {
         AND (receiver_id IS NULL OR receiver_id = ${userId})
       ON CONFLICT DO NOTHING
     `);
+  }
+
+  async getPlanEntryReport(startDate: Date, endDate: Date): Promise<PlanEntryReportRow[]> {
+    const rows = await db
+      .select({
+        activityId: activities.id,
+        managerId: activities.userId,
+        managerFirstName: users.firstName,
+        managerLastName: users.lastName,
+        managerUsername: users.username,
+        planTitle: activities.title,
+        createdAt: activities.createdAt,
+        updatedAt: activities.updatedAt,
+        startDate: activities.startDate,
+        endDate: activities.endDate,
+        approvalStatus: activities.approvalStatus,
+      })
+      .from(activities)
+      .innerJoin(users, eq(activities.userId, users.id))
+      .where(and(gte(activities.createdAt, startDate), lte(activities.createdAt, endDate)))
+      .orderBy(asc(activities.createdAt), asc(users.lastName), asc(users.firstName));
+
+    return rows.map((row) => ({
+      ...row,
+      managerName: `${row.managerLastName || ""} ${row.managerFirstName || ""}`.trim() || row.managerUsername,
+      managerUsername: row.managerUsername,
+      approvalStatus: row.approvalStatus as ApprovalStatus,
+    }));
   }
 
   async getUnreadMessageCount(userId: string): Promise<number> {

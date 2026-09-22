@@ -931,6 +931,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/analytics/plan-entry-report", requireAllPlansViewer, async (req, res) => {
+    try {
+      const startDate = new Date(String(req.query.startDate || ""));
+      const endDate = new Date(String(req.query.endDate || ""));
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || startDate > endDate) {
+        return res.status(400).json({ message: "Укажите корректный недельный период" });
+      }
+      const report = await storage.getPlanEntryReport(startDate, endDate);
+      res.json(report);
+    } catch (error) {
+      console.error("Get plan entry report error:", error);
+      res.status(500).json({ message: "Не удалось загрузить отчет внесения планов" });
+    }
+  });
+
   app.get("/api/messages/:userId", requireManagerOrAdmin, async (req, res) => {
     try {
       if (req.params.userId !== req.user?.id) {
