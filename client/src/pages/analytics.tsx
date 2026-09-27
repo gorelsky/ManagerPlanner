@@ -17,6 +17,7 @@ import SideMenu from "@/components/side-menu";
 import UserProfile from "@/components/user-profile";
 import { useAuth } from "@/contexts/auth-context";
 import { activityApi, analyticsApi, holidaysApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   startOfWeek,
   endOfWeek,
@@ -210,6 +211,44 @@ export default function Analytics() {
   const cancelledActivities = activities.filter(
     (a) => a.status === "cancelled" || a.status === "rescheduled",
   ).length;
+  const now = new Date();
+  const approvedPendingCompletion = activities.filter(
+    (a) => a.approvalStatus === "approved" && a.status !== "completed" && a.status !== "cancelled",
+  ).length;
+  const overdueIncomplete = activities.filter(
+    (a) => a.approvalStatus === "approved" && a.status !== "completed" && a.status !== "cancelled" && new Date(a.endDate) < now,
+  ).length;
+  const rejectedActivities = activities.filter((a) => a.approvalStatus === "rejected").length;
+  const approvalRate = totalActivities > 0
+    ? Math.round((activities.filter((a) => a.approvalStatus === "approved").length / totalActivities) * 100)
+    : 0;
+  const managerExecutionSummary = Object.values(activities.reduce<Record<string, {
+    name: string;
+    total: number;
+    approved: number;
+    completed: number;
+    overdue: number;
+    rejected: number;
+  }>>((summary, activity) => {
+    const key = activity.userId;
+    const current = summary[key] || {
+      name: activity.managerName || "Без менеджера",
+      total: 0,
+      approved: 0,
+      completed: 0,
+      overdue: 0,
+      rejected: 0,
+    };
+    current.total += 1;
+    if (activity.approvalStatus === "approved") current.approved += 1;
+    if (activity.status === "completed") current.completed += 1;
+    if (activity.approvalStatus === "rejected") current.rejected += 1;
+    if (activity.approvalStatus === "approved" && activity.status !== "completed" && activity.status !== "cancelled" && new Date(activity.endDate) < now) {
+      current.overdue += 1;
+    }
+    summary[key] = current;
+    return summary;
+  }, {})).sort((a, b) => b.overdue - a.overdue || b.total - a.total);
 
 
   const typeBreakdown = activities.reduce((acc, activity) => {
@@ -353,7 +392,61 @@ export default function Analytics() {
             </div>
             <div className="text-sm text-muted-foreground">Отменено</div>
           </div>
+          <div className="bg-amber-100 rounded-lg p-4 text-center border border-amber-300" data-testid="stat-overdue">
+            <div className="text-2xl font-bold text-amber-800">{overdueIncomplete}</div>
+            <div className="text-sm text-amber-900">Просрочено и не выполнено</div>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200" data-testid="stat-pending-completion">
+            <div className="text-2xl font-bold text-blue-800">{approvedPendingCompletion}</div>
+            <div className="text-sm text-blue-900">Утверждено, ждёт выполнения</div>
+          </div>
+          <div className="bg-red-50 rounded-lg p-4 text-center border border-red-200" data-testid="stat-rejected">
+            <div className="text-2xl font-bold text-red-800">{rejectedActivities}</div>
+            <div className="text-sm text-red-900">Отклонено</div>
+          </div>
+          <div className="bg-emerald-50 rounded-lg p-4 text-center border border-emerald-200" data-testid="stat-approval-rate">
+            <div className="text-2xl font-bold text-emerald-800">{approvalRate}%</div>
+            <div className="text-sm text-emerald-900">Доля утверждённых</div>
+          </div>
         </div>
+
+        {canViewAllPlans && (
+          <div className="bg-muted rounded-lg p-4 mb-6" data-testid="manager-execution-summary">
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-foreground">Контроль исполнения по менеджерам</h4>
+              <p className="text-xs text-muted-foreground">Показывает просроченные и невыполненные утверждённые планы за выбранный период.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="py-2 pr-3">Менеджер</th>
+                    <th className="py-2 pr-3">Всего</th>
+                    <th className="py-2 pr-3">Утверждено</th>
+                    <th className="py-2 pr-3">Выполнено</th>
+                    <th className="py-2 pr-3">Просрочено</th>
+                    <th className="py-2">Отклонено</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {managerExecutionSummary.map((row) => (
+                    <tr key={row.name} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-medium">{row.name}</td>
+                      <td className="py-2 pr-3">{row.total}</td>
+                      <td className="py-2 pr-3">{row.approved}</td>
+                      <td className="py-2 pr-3 text-emerald-700">{row.completed}</td>
+                      <td className={cn("py-2 pr-3 font-semibold", row.overdue > 0 ? "text-amber-700" : "text-muted-foreground")}>{row.overdue}</td>
+                      <td className="py-2 text-red-700">{row.rejected}</td>
+                    </tr>
+                  ))}
+                  {managerExecutionSummary.length === 0 && (
+                    <tr><td colSpan={6} className="py-5 text-center text-muted-foreground">За выбранный период планов нет.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
 
         {/* Chart */}
