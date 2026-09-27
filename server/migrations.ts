@@ -84,6 +84,23 @@ export async function runDatabaseMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS manager_plan_performance_week_idx
       ON manager_plan_performance (week_start DESC);
 
+    CREATE TABLE IF NOT EXISTS activity_history (
+      id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+      activity_id varchar NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+      actor_id varchar REFERENCES users(id) ON DELETE SET NULL,
+      event_type text NOT NULL,
+      from_value text,
+      to_value text,
+      details text,
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS activity_history_activity_idx
+      ON activity_history (activity_id, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS activity_history_actor_idx
+      ON activity_history (actor_id);
+
   `);
 
   console.log("Database migrations applied");

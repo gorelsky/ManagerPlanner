@@ -9,6 +9,7 @@ import {
   managerPlanPerformance,
   holidays,
   userLoginSessions,
+  activityHistory,
   type User,
   type InsertUser,
   type City,
@@ -31,6 +32,8 @@ import {
   type Holiday,
   type InsertHoliday,
   type UserLoginSession,
+  type ActivityHistory,
+  type ActivityHistoryWithActor,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
@@ -101,6 +104,15 @@ export interface IStorage {
   ): Promise<ActivityWithDetails[]>;
   getPlanEntryReport(startDate: Date, endDate: Date): Promise<PlanEntryReportRow[]>;
   getActivity(id: string): Promise<ActivityWithDetails | undefined>;
+  getActivityHistory(id: string): Promise<ActivityHistoryWithActor[]>;
+  recordActivityHistory(event: {
+    activityId: string;
+    actorId?: string | null;
+    eventType: string;
+    fromValue?: string | null;
+    toValue?: string | null;
+    details?: string | null;
+  }): Promise<ActivityHistory>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;
@@ -1115,6 +1127,58 @@ export class DatabaseStorage implements IStorage {
       city: result.city!,
       employee: result.employee || undefined,
     };
+  }
+
+  async getActivityHistory(id: string): Promise<ActivityHistoryWithActor[]> {
+    const rows = await db
+      .select({
+        id: activityHistory.id,
+        activityId: activityHistory.activityId,
+        actorId: activityHistory.actorId,
+        eventType: activityHistory.eventType,
+        fromValue: activityHistory.fromValue,
+        toValue: activityHistory.toValue,
+        details: activityHistory.details,
+        createdAt: activityHistory.createdAt,
+        actor: {
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          middleName: users.middleName,
+        },
+      })
+      .from(activityHistory)
+      .leftJoin(users, eq(activityHistory.actorId, users.id))
+      .where(eq(activityHistory.activityId, id))
+      .orderBy(desc(activityHistory.createdAt));
+
+    return rows.map((row) => ({
+      ...row,
+      actor: row.actor?.id ? row.actor : undefined,
+    }));
+  }
+
+  async recordActivityHistory(event: {
+    activityId: string;
+    actorId?: string | null;
+    eventType: string;
+    fromValue?: string | null;
+    toValue?: string | null;
+    details?: string | null;
+  }): Promise<ActivityHistory> {
+    const [record] = await db
+      .insert(activityHistory)
+      .values({
+        activityId: event.activityId,
+        actorId: event.actorId ?? null,
+        eventType: event.eventType,
+        fromValue: event.fromValue ?? null,
+        toValue: event.toValue ?? null,
+        details: event.details ?? null,
+      })
+      .returning();
+    return record;
   }
 
   async createActivity(insertActivity: InsertActivity): Promise<Activity> {

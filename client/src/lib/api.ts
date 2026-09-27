@@ -20,6 +20,7 @@ import type {
   ManagerCityWithDetails,
   UserLoginSession,
   ManagerPlanPerformanceWithManager,
+  ActivityHistoryWithActor,
 } from "@shared/schema";
 
 // Если у тебя есть эти типы — оставь, если нет, убери или скорректируй импорт
@@ -210,6 +211,9 @@ getActivitiesByUser: async (
 
   getActivity: (id: string): Promise<ActivityWithDetails> =>
     apiRequest("GET", `/api/activities/${id}`).then((res) => res.json()),
+
+  getActivityHistory: (id: string): Promise<ActivityHistoryWithActor[]> =>
+    apiRequest("GET", `/api/activities/${id}/history`).then((res) => res.json()),
 
   createActivity: async (activity: InsertActivity): Promise<Activity> => {
     const res = await apiRequest("POST", "/api/activities", activity);

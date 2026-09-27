@@ -750,6 +750,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/activities/:id/history", requireManagerOrAdmin, async (req, res) => {
+    try {
+      const activity = await storage.getActivity(req.params.id);
+      if (!activity) return res.status(404).json({ message: "Activity not found" });
+      if (req.user?.role === "manager" && activity.userId !== req.user.id) {
+        return res.status(403).json({ message: "Нельзя просматривать историю чужого плана" });
+      }
+      res.json(await storage.getActivityHistory(req.params.id));
+    } catch (error) {
+      console.error("Get activity history error:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/activities", requirePlanEditor, async (req, res) => {
     try {
       const body = parseDateFields(req.body, ["startDate", "endDate"]);
@@ -769,6 +783,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Нельзя добавлять активности задним числом" });
       }
       const activity = await storage.createActivity(activityData);
+      await storage.recordActivityHistory({
+        activityId: activity.id,
+        actorId: req.user!.id,
+        eventType: "created",
+        toValue: "created",
+        details: "План создан",
+      });
       res.status(201).json(activity);
     } catch (error) {
       console.error("Create activity error:", error);
@@ -809,6 +830,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const data = updateActivitySchema.parse(dataToValidate);
       const activity = await storage.updateActivity(id, data);
+      await storage.recordActivityHistory({
+        activityId: activity.id,
+        actorId: req.user!.id,
+        eventType: "updated",
+        fromValue: existing.approvalStatus,
+        toValue: "created",
+        details: "План изменён и отправлен на повторное согласование",
+      });
       res.json(activity);
     } catch (error) {
       console.error("Update activity error:", error);
@@ -847,6 +876,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       const activity = await storage.updateActivityStatus(id, status);
+      await storage.recordActivityHistory({
+        activityId: activity.id,
+        actorId: req.user!.id,
+        eventType: "status_changed",
+        fromValue: existing.status,
+        toValue: status,
+        details: status === "completed" ? "План отмечен выполненным" : "Изменён статус выполнения",
+      });
       res.json(activity);
     } catch (error) {
       console.error("Update activity status error:", error);
@@ -873,6 +910,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approvalStatus,
         req.user!.id,
       );
+      await storage.recordActivityHistory({
+        activityId: activity.id,
+        actorId: req.user!.id,
+        eventType: "approval_changed",
+        fromValue: existing.approvalStatus,
+        toValue: approvalStatus,
+        details: approvalStatus === "approved" ? "План утверждён" : "План отклонён",
+      });
       res.json(activity);
     } catch (error) {
       console.error("Update activity approval error:", error);

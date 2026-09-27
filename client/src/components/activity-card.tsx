@@ -1,8 +1,11 @@
 import { format } from "date-fns";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { planningDate } from "@shared/planning-time";
 import { ru } from "date-fns/locale";
-import { MapPin, Clock, Check, Edit, X, CheckCircle2, XCircle } from "lucide-react";
+import { MapPin, Clock, Check, Edit, X, History, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { activityApi } from "@/lib/api";
 import type { ActivityWithDetails, ApprovalStatus } from "@shared/schema";
 
 interface ActivityCardProps {
@@ -40,6 +43,12 @@ export default function ActivityCard({
   onApprove,
   onReject,
 }: ActivityCardProps) {
+  const [showHistory, setShowHistory] = useState(false);
+  const { data: history = [], isFetching: isHistoryLoading } = useQuery({
+    queryKey: ["/api/activities", activity.id, "history"],
+    queryFn: () => activityApi.getActivityHistory(activity.id),
+    enabled: showHistory,
+  });
   const status = statusConfig[activity.status as keyof typeof statusConfig] || statusConfig.planned;
   const approvalStatus = activity.approvalStatus || "created";
   const approval = approvalConfig[approvalStatus];
@@ -118,6 +127,14 @@ export default function ActivityCard({
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0">
+          <button
+            className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            onClick={() => setShowHistory((value) => !value)}
+            title="История изменений плана"
+            data-testid="button-activity-history"
+          >
+            <History className="w-3.5 h-3.5" /> История
+          </button>
           {canReview && !isCompleted && (
             <div className="flex gap-1">
               <button
@@ -175,6 +192,48 @@ export default function ActivityCard({
           )}
         </div>
       </div>
+
+      {showHistory && (
+        <div className="mt-3 border-t border-slate-200 pt-3" data-testid="activity-history">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-slate-800">История изменений</h4>
+            {isHistoryLoading && <span className="text-[11px] text-muted-foreground">Загрузка…</span>}
+          </div>
+          {!isHistoryLoading && history.length === 0 && (
+            <p className="text-xs text-muted-foreground">Изменений пока нет.</p>
+          )}
+          <div className="space-y-2">
+            {history.map((item) => {
+              const actor = item.actor
+                ? `${item.actor.lastName || ""} ${item.actor.firstName || ""}`.trim() || item.actor.username
+                : "Пользователь системы";
+              const eventLabel = item.eventType === "created"
+                ? "Создан"
+                : item.eventType === "updated"
+                  ? "Изменён"
+                  : item.eventType === "approval_changed"
+                    ? "Изменено согласование"
+                    : item.eventType === "status_changed"
+                      ? "Изменён статус выполнения"
+                      : item.eventType;
+              const transition = item.fromValue && item.toValue && item.fromValue !== item.toValue
+                ? ` (${item.fromValue} → ${item.toValue})`
+                : "";
+              return (
+                <div key={item.id} className="rounded bg-slate-50 px-2.5 py-2 text-xs text-slate-700">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">{eventLabel}{transition}</span>
+                    <time className="text-[11px] text-muted-foreground">
+                      {new Date(item.createdAt).toLocaleString("ru-RU")}
+                    </time>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">{actor}{item.details ? ` · ${item.details}` : ""}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

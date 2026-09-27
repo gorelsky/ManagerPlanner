@@ -201,6 +201,24 @@ export const messageReads = pgTable(
   }),
 );
 
+export const activityHistory = pgTable(
+  "activity_history",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    activityId: varchar("activity_id").notNull().references(() => activities.id, { onDelete: "cascade" }),
+    actorId: varchar("actor_id").references(() => users.id, { onDelete: "set null" }),
+    eventType: text("event_type").notNull(),
+    fromValue: text("from_value"),
+    toValue: text("to_value"),
+    details: text("details"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    activityIdx: index("activity_history_activity_idx").on(table.activityId, table.createdAt),
+    actorIdx: index("activity_history_actor_idx").on(table.actorId),
+  }),
+);
+
 export const holidays = pgTable(
   "holidays",
   {
@@ -467,6 +485,10 @@ export type InsertActivityType = z.infer<typeof insertActivityTypeSchema>;
 
 export type Activity = typeof activities.$inferSelect;
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
+export type ActivityHistory = typeof activityHistory.$inferSelect;
+export type ActivityHistoryWithActor = ActivityHistory & {
+  actor?: Pick<PublicUser, "id" | "username" | "firstName" | "lastName" | "middleName">;
+};
 
 export type UpdateActivity = z.infer<typeof updateActivitySchema>;
 
