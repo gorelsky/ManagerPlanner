@@ -33,6 +33,17 @@ const approvalConfig: Record<ApprovalStatus, { label: string; className: string 
   rejected: { label: "Отклонён", className: "bg-red-200 text-red-900 border-red-500" },
 };
 
+const historyValueLabels: Record<string, string> = {
+  planned: "Запланировано",
+  in_progress: "В процессе",
+  completed: "Выполнено",
+  cancelled: "Отменено",
+  rescheduled: "Перенесено",
+  created: "Создан",
+  approved: "Утверждён",
+  rejected: "Отклонён",
+};
+
 export default function ActivityCard({
   activity,
   currentUserId,
@@ -217,7 +228,7 @@ export default function ActivityCard({
                       ? "Изменён статус выполнения"
                       : item.eventType;
               const transition = item.fromValue && item.toValue && item.fromValue !== item.toValue
-                ? ` (${item.fromValue} → ${item.toValue})`
+                ? ` (${historyValueLabels[item.fromValue] || item.fromValue} → ${historyValueLabels[item.toValue] || item.toValue})`
                 : "";
               return (
                 <div key={item.id} className="rounded bg-slate-50 px-2.5 py-2 text-xs text-slate-700">

@@ -101,6 +101,19 @@ export async function runDatabaseMigrations(): Promise<void> {
     CREATE INDEX IF NOT EXISTS activity_history_actor_idx
       ON activity_history (actor_id);
 
+    INSERT INTO activity_history (activity_id, actor_id, event_type, to_value, details, created_at)
+    SELECT
+      a.id,
+      a.user_id,
+      'created',
+      COALESCE(a.approval_status, 'created'),
+      'Начальная запись истории создана при обновлении приложения',
+      COALESCE(a.created_at, NOW())
+    FROM activities a
+    WHERE NOT EXISTS (
+      SELECT 1 FROM activity_history h WHERE h.activity_id = a.id
+    );
+
   `);
 
   console.log("Database migrations applied");
