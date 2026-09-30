@@ -1,0 +1,49 @@
+name: Build ManagerPlanner image for Yandex Cloud
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    env:
+      YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+      IMAGE_NAME: managerplanner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Yandex Cloud CLI
+        shell: bash
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
+
+      - name: Configure Yandex Cloud credentials
+        shell: bash
+        env:
+          YC_SERVICE_ACCOUNT_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$YC_SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/yc-key.json"
+          yc config profile create managerplanner-ci
+          yc config set service-account-key "$RUNNER_TEMP/yc-key.json"
+          yc container registry configure-docker --registry-id "$YC_REGISTRY_ID"
+
+      - name: Build and push image
+        shell: bash
+        run: |
+          IMAGE="cr.yandex/${YC_REGISTRY_ID}/${IMAGE_NAME}:${GITHUB_SHA}"
+          docker build --pull -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Publish image reference
+        shell: bash
+        run: echo "Published $IMAGE"
