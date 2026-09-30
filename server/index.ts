@@ -79,6 +79,17 @@ app.get("/health", (_req, res) => {
   });
 });
 
+app.get("/health/ready", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ status: "ok", database: "ok" });
+  } catch (error) {
+    console.error("Readiness database check failed:", error);
+    res.status(503).json({ status: "unavailable", database: "error" });
+  }
+});
+
 (async () => {
   const server = await registerRoutes(app);
 
@@ -104,4 +115,14 @@ app.get("/health", (_req, res) => {
   server.listen(port, host, () => {
     console.log(`Сервер запущен на http://${host}:${port}`);
   });
+
+  const shutdown = async (signal: string) => {
+    console.log(`Получен ${signal}, завершаем работу сервера`);
+    server.close(async () => {
+      await pool.end();
+      process.exit(0);
+    });
+  };
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+  process.once("SIGINT", () => void shutdown("SIGINT"));
 })();

@@ -1,0 +1,13 @@
+.git
+.local
+.env
+node_modules
+dist
+android
+attached_assets
+outputs
+mp-planner-front
+*.dump
+*.sql
+scripts/plan-import-token.txt
+scripts/plan-performance-import.log

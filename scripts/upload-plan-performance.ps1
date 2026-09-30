@@ -13,6 +13,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Windows PowerShell may default to obsolete TLS versions. Railway/Cloudflare
+# require TLS 1.2 or newer for the protected import endpoint.
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+}
+
 if (-not (Test-Path -LiteralPath $FolderPath -PathType Container)) {
   throw "Folder not found: $FolderPath"
 }
