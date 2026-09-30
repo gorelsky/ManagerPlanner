@@ -19,6 +19,12 @@ import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 import { changePasswordSchema } from "./passwords";
+import {
+  buildAuthorizationUrl,
+  createOidcTransaction,
+  exchangeCode,
+  isYandexOidcEnabled,
+} from "./yandex-oidc";
 
 // ===================== Типы и расширения =====================
 
@@ -40,6 +46,10 @@ declare module "express-session" {
     loginSessionId?: string;
     lastActivityTrackedAt?: number;
     impersonatorUserId?: string;
+    oidcState?: string;
+    oidcNonce?: string;
+    oidcVerifier?: string;
+    oidcReturnTo?: string;
   }
 }
 
@@ -181,6 +191,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ----- Публичные маршруты (не требуют аутентификации) -----
 
+  app.get("/api/auth/yandex/enabled", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ enabled: isYandexOidcEnabled() });
+  });
+
+  app.get("/api/auth/yandex/start", async (req, res) => {
+    if (!isYandexOidcEnabled()) {
+      return res.status(404).json({ message: "Вход через Яндекс 360 еще не настроен" });
+    }
+    try {
+      const transaction = createOidcTransaction();
+      req.session.oidcState = transaction.state;
+      req.session.oidcNonce = transaction.nonce;
+      req.session.oidcVerifier = transaction.verifier;
+      req.session.oidcReturnTo = typeof req.query.returnTo === "string" && req.query.returnTo.startsWith("/")
+        ? req.query.returnTo
+        : "/";
+      res.setHeader("Cache-Control", "no-store");
+      return res.redirect(await buildAuthorizationUrl(transaction));
+    } catch (error) {
+      console.error("Yandex OIDC start error:", error);
+      return res.status(503).json({ message: "Вход через Яндекс 360 временно недоступен" });
+    }
+  });
+
+  app.get("/api/auth/yandex/callback", async (req, res) => {
+    const returnTo = req.session.oidcReturnTo || "/";
+    const clearOidcTransaction = () => {
+      delete req.session.oidcState;
+      delete req.session.oidcNonce;
+      delete req.session.oidcVerifier;
+      delete req.session.oidcReturnTo;
+    };
+    try {
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      if (!state || !code || !req.session.oidcState || !req.session.oidcNonce || !req.session.oidcVerifier) {
+        throw new Error("Неполный ответ авторизации");
+      }
+      const expected = Buffer.from(req.session.oidcState);
+      const actual = Buffer.from(state);
+      if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+        throw new Error("Недействительный state");
+      }
+      const claims = await exchangeCode(code, req.session.oidcVerifier, req.session.oidcNonce);
+      let user = await storage.getUserByOidcSubject(claims.sub);
+      if (!user) user = await storage.getUserByEmail(claims.email);
+      if (!user) {
+        throw new Error("Ваша корпоративная учетная запись подтверждена, но доступ к ManagerPlanner вам не предоставлен. Обратитесь к администратору.");
+      }
+      if (user.accountStatus && user.accountStatus !== "active") {
+        throw new Error("Доступ этой учетной записи заблокирован. Обратитесь к администратору.");
+      }
+      if (user.oidcSubject !== claims.sub) await storage.linkUserOidcSubject(user.id, claims.sub);
+      await new Promise<void>((resolve, reject) => {
+        req.session.regenerate((error) => (error ? reject(error) : resolve()));
+      });
+      const loginSession = await storage.createLoginSession(user);
+      req.session.userId = user.id;
+      req.session.loginSessionId = loginSession.id;
+      req.session.lastActivityTrackedAt = Date.now();
+      clearOidcTransaction();
+      return res.redirect(returnTo);
+    } catch (error) {
+      clearOidcTransaction();
+      const message = error instanceof Error ? error.message : "Не удалось выполнить корпоративный вход";
+      console.error("Yandex OIDC callback error:", error);
+      return res.redirect(`/login?authError=${encodeURIComponent(message)}`);
+    }
+  });
+
   // Логин по локальной БД (оставлен для обратной совместимости)
   app.post("/api/auth/login", async (req, res) => {
     try {
@@ -189,6 +270,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUserByUsername(username);
       if (!user) {
         return res.status(401).json({ message: "Неверный логин или пароль" });
+      }
+      if (user.accountStatus && user.accountStatus !== "active") {
+        return res.status(403).json({ message: "Доступ этой учетной записи заблокирован" });
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -290,6 +374,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ...publicUser,
       isImpersonating: Boolean(req.session.impersonatorUserId),
     });
+  });
+
+  // Standardized session endpoint for OIDC-aware clients.
+  app.get("/api/auth/session", async (req, res) => {
+    const user = await storage.getUser(req.user!.id);
+    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
+    const { password: _, ...publicUser } = user;
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ...publicUser, isImpersonating: Boolean(req.session.impersonatorUserId) });
   });
 
   app.post("/api/auth/impersonate/:userId", requireSystemAdmin, async (req, res) => {

@@ -49,6 +49,9 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByOidcSubject(subject: string): Promise<User | undefined>;
+  linkUserOidcSubject(id: string, subject: string): Promise<void>;
   createUser(user: InsertUser & { id?: string }): Promise<User>;
   updateUserPassword(id: string, password: string, mustChangePassword?: boolean): Promise<void>;
   getManagersList(): Promise<User[]>;
@@ -179,6 +182,23 @@ export class DatabaseStorage implements IStorage {
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(sql`lower(${users.email}) = lower(${email})`);
+    return user || undefined;
+  }
+
+  async getUserByOidcSubject(subject: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.oidcSubject, subject));
+    return user || undefined;
+  }
+
+  async linkUserOidcSubject(id: string, subject: string): Promise<void> {
+    await db.update(users).set({ oidcSubject: subject }).where(eq(users.id, id));
   }
 
   async createUser(insertUser: InsertUser & { id?: string }): Promise<User> {
@@ -1143,6 +1163,9 @@ export class DatabaseStorage implements IStorage {
         actor: {
           id: users.id,
           username: users.username,
+          email: users.email,
+          oidcSubject: users.oidcSubject,
+          accountStatus: users.accountStatus,
           firstName: users.firstName,
           lastName: users.lastName,
           middleName: users.middleName,
@@ -1311,6 +1334,9 @@ export class DatabaseStorage implements IStorage {
         sender: {
           id: users.id,
           username: users.username,
+          email: users.email,
+          oidcSubject: users.oidcSubject,
+          accountStatus: users.accountStatus,
           firstName: users.firstName,
           lastName: users.lastName,
           middleName: users.middleName,
@@ -1351,6 +1377,9 @@ export class DatabaseStorage implements IStorage {
       .select({
         id: users.id,
         username: users.username,
+        email: users.email,
+        oidcSubject: users.oidcSubject,
+        accountStatus: users.accountStatus,
         firstName: users.firstName,
         lastName: users.lastName,
         middleName: users.middleName,

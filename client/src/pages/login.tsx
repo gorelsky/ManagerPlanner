@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,8 +13,24 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [oidcEnabled, setOidcEnabled] = useState(false);
   const { login } = useAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    void fetch("/api/auth/yandex/enabled", { credentials: "include" })
+      .then((response) => response.ok ? response.json() : { enabled: false })
+      .then((value) => setOidcEnabled(Boolean(value.enabled)))
+      .catch(() => setOidcEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    const message = new URLSearchParams(window.location.search).get("authError");
+    if (message) {
+      toast({ title: "Ошибка корпоративного входа", description: message, variant: "destructive" });
+      window.history.replaceState({}, "", "/login");
+    }
+  }, [toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +153,17 @@ export default function Login() {
               >
                 {isLoading ? "Вход..." : "Войти"}
               </Button>
+              {oidcEnabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => { window.location.href = "/api/auth/yandex/start?returnTo=/"; }}
+                  data-testid="button-yandex-login"
+                >
+                  Войти через Яндекс 360
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>

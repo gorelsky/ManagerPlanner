@@ -43,7 +43,16 @@ export async function runDatabaseMigrations(): Promise<void> {
       ADD COLUMN IF NOT EXISTS is_on_maternity_leave boolean NOT NULL DEFAULT false;
 
     ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+      ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS email text,
+      ADD COLUMN IF NOT EXISTS oidc_subject text,
+      ADD COLUMN IF NOT EXISTS account_status text NOT NULL DEFAULT 'active';
+
+    CREATE UNIQUE INDEX IF NOT EXISTS users_oidc_subject_idx
+      ON users (oidc_subject)
+      WHERE oidc_subject IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS users_email_idx ON users (lower(email));
 
     CREATE TABLE IF NOT EXISTS user_login_sessions (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
