@@ -34,5 +34,9 @@ export function databasePoolConfig(
     idleTimeoutMillis: 30000,
     max: 5,
     application_name: "managerplanner",
+    // Yandex Managed PostgreSQL may assign a user-specific search_path.
+    // The application schema is intentionally kept in public during the
+    // migration, so qualify the default path explicitly for every session.
+    options: "-c search_path=public",
   };
 }
