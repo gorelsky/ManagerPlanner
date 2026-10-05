@@ -27,6 +27,44 @@ import {
   readSignedOidcState,
 } from "./yandex-oidc";
 
+const AUTH_COOKIE_NAME = "mp_auth";
+const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+
+function authCookieSecret(): string {
+  return process.env.SESSION_SECRET || "development-only-secret";
+}
+
+function signAuthCookie(userId: string, loginSessionId: string): string {
+  const expiresAt = Math.floor(Date.now() / 1000) + AUTH_COOKIE_MAX_AGE_SECONDS;
+  const payload = Buffer.from(`${userId}|${loginSessionId}|${expiresAt}`, "utf8").toString("base64url");
+  const signature = crypto.createHmac("sha256", authCookieSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function readAuthCookie(req: Request): { userId: string; loginSessionId: string } | null {
+  const raw = req.headers.cookie?.split(";").map(value => value.trim()).find(value => value.startsWith(`${AUTH_COOKIE_NAME}=`));
+  if (!raw) return null;
+  const token = raw.slice(AUTH_COOKIE_NAME.length + 1);
+  const [payload, signature] = token.split(".");
+  if (!payload || !signature) return null;
+  const expected = crypto.createHmac("sha256", authCookieSecret()).update(payload).digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  const [userId, loginSessionId, expiresAt] = Buffer.from(payload, "base64url").toString("utf8").split("|");
+  if (!userId || !loginSessionId || !expiresAt || Number(expiresAt) < Math.floor(Date.now() / 1000)) return null;
+  return { userId, loginSessionId };
+}
+
+function setAuthCookie(res: Response, userId: string, loginSessionId: string): void {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.setHeader("Set-Cookie", `${AUTH_COOKIE_NAME}=${signAuthCookie(userId, loginSessionId)}; Path=/; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax${secure}`);
+}
+
+function clearAuthCookie(res: Response): void {
+  res.append("Set-Cookie", `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
+}
+
 // ===================== Типы и расширения =====================
 
 declare global {
@@ -58,9 +96,15 @@ declare module "express-session" {
 
 async function authenticate(req: Request, res: Response, next: NextFunction) {
   try {
-    const userId = req.session?.userId;
+    const fallbackCookie = !req.session?.userId ? readAuthCookie(req) : null;
+    const userId = req.session?.userId || fallbackCookie?.userId;
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (fallbackCookie) {
+      req.session.userId = fallbackCookie.userId;
+      req.session.loginSessionId = fallbackCookie.loginSessionId;
     }
 
     const user = await storage.getUser(userId);
@@ -256,17 +300,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Доступ этой учетной записи заблокирован. Обратитесь к администратору.");
       }
       if (user.oidcSubject !== claims.sub) await storage.linkUserOidcSubject(user.id, claims.sub);
-      await new Promise<void>((resolve, reject) => {
-        req.session.regenerate((error) => (error ? reject(error) : resolve()));
-      });
       const loginSession = await storage.createLoginSession(user);
       req.session.userId = user.id;
       req.session.loginSessionId = loginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
       clearOidcTransaction();
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((error) => (error ? reject(error) : resolve()));
-      });
+      setAuthCookie(res, user.id, loginSession.id);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          req.session.save((error) => (error ? reject(error) : resolve()));
+        });
+      } catch (error) {
+        console.error("Session store save after Yandex callback failed; signed auth cookie remains active:", error);
+      }
       return res.redirect(returnTo);
     } catch (error) {
       clearOidcTransaction();
@@ -301,6 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.userId = user.id;
       req.session.loginSessionId = loginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
+      setAuthCookie(res, user.id, loginSession.id);
       const { password: _, ...userWithoutPassword } = user;
       res.json({ ...userWithoutPassword, isImpersonating: false });
     } catch (error) {
@@ -329,6 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Ошибка выхода" });
       }
       res.clearCookie("connect.sid");
+      clearAuthCookie(res);
       res.json({ message: "Выход выполнен" });
     });
   });
