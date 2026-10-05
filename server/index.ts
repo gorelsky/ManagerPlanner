@@ -39,6 +39,10 @@ app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 const PgStore = pgSession(session);
 app.use(
   session({
+    // Yandex Serverless Container terminates HTTPS at its edge proxy. Keep
+    // express-session aware of that proxy so Secure cookies are emitted even
+    // when the container itself receives an internal HTTP request.
+    proxy: true,
     store: new PgStore({
       pool,
       tableName: "session",
@@ -50,7 +54,11 @@ app.use(
     cookie: {
       secure: isProduction,
       httpOnly: true,
-      sameSite: "lax",
+      // OIDC returns through a different site (auth.yandex.cloud). None is
+      // required for the freshly regenerated session cookie to survive that
+      // cross-site redirect in all supported browsers.
+      sameSite: isProduction ? "none" : "lax",
+      path: "/",
       maxAge: 1000 * 60 * 60 * 24 * 7, // 1 неделя
     },
   })
