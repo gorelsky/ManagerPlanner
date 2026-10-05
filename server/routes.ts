@@ -208,6 +208,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.oidcReturnTo = typeof req.query.returnTo === "string" && req.query.returnTo.startsWith("/")
         ? req.query.returnTo
         : "/";
+      // Serverless/proxy runtimes may finish the redirect before the session
+      // store's implicit save callback runs. Persist the OAuth transaction
+      // explicitly so the callback can validate state/nonce/PKCE reliably.
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((error) => (error ? reject(error) : resolve()));
+      });
       res.setHeader("Cache-Control", "no-store");
       return res.redirect(await buildAuthorizationUrl(transaction));
     } catch (error) {
@@ -253,6 +259,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.loginSessionId = loginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
       clearOidcTransaction();
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((error) => (error ? reject(error) : resolve()));
+      });
       return res.redirect(returnTo);
     } catch (error) {
       clearOidcTransaction();
