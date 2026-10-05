@@ -87,9 +87,7 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Production bundles may be requested from the Railway domain while the
-  // application itself is opened on sls-planner.ru. Only immutable frontend
-  // assets are public cross-origin; API responses and sessions are unaffected.
+  // Serve immutable frontend bundles from the same origin as the application.
   app.use(
     "/assets",
     express.static(assetsPath, {
