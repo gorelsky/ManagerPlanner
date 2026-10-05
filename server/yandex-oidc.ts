@@ -28,6 +28,43 @@ type OidcClaims = {
 const base64Url = (value: Buffer | string) =>
   Buffer.from(value).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 
+function stateSigningKey(): string {
+  return process.env.SESSION_SECRET || "development-only-secret";
+}
+
+type OidcStatePayload = {
+  nonce: string;
+  verifier: string;
+  returnTo: string;
+  exp: number;
+};
+
+function encryptStatePayload(payload: OidcStatePayload): string {
+  const key = crypto.createHash("sha256").update(stateSigningKey()).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(payload), "utf8"), cipher.final()]);
+  return `${base64Url(iv)}.${base64Url(ciphertext)}.${base64Url(cipher.getAuthTag())}`;
+}
+
+export function readSignedOidcState(value: string): OidcStatePayload | null {
+  const [ivEncoded, ciphertextEncoded, tagEncoded] = value.split(".");
+  if (!ivEncoded || !ciphertextEncoded || !tagEncoded) return null;
+  try {
+    const key = crypto.createHash("sha256").update(stateSigningKey()).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(ivEncoded, "base64url"));
+    decipher.setAuthTag(Buffer.from(tagEncoded, "base64url"));
+    const payload = JSON.parse(Buffer.concat([
+      decipher.update(Buffer.from(ciphertextEncoded, "base64url")),
+      decipher.final(),
+    ]).toString("utf8")) as OidcStatePayload;
+    if (!payload.nonce || !payload.verifier || !payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing OIDC configuration: ${name}`);
@@ -70,10 +107,15 @@ async function getConfig(): Promise<OidcConfig> {
 }
 
 export function createOidcTransaction() {
-  const state = base64Url(crypto.randomBytes(32));
   const nonce = base64Url(crypto.randomBytes(32));
   const verifier = base64Url(crypto.randomBytes(48));
   const challenge = base64Url(crypto.createHash("sha256").update(verifier).digest());
+  const state = encryptStatePayload({
+    nonce,
+    verifier,
+    returnTo: "/",
+    exp: Math.floor(Date.now() / 1000) + 10 * 60,
+  });
   return { state, nonce, verifier, challenge };
 }
 

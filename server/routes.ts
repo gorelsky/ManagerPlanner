@@ -24,6 +24,7 @@ import {
   createOidcTransaction,
   exchangeCode,
   isYandexOidcEnabled,
+  readSignedOidcState,
 } from "./yandex-oidc";
 
 // ===================== Типы и расширения =====================
@@ -223,7 +224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/auth/yandex/callback", async (req, res) => {
-    const returnTo = req.session.oidcReturnTo || "/";
+    const signedState = typeof req.query.state === "string" ? readSignedOidcState(req.query.state) : null;
+    const returnTo = req.session.oidcReturnTo || signedState?.returnTo || "/";
     const clearOidcTransaction = () => {
       delete req.session.oidcState;
       delete req.session.oidcNonce;
@@ -233,15 +235,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const state = typeof req.query.state === "string" ? req.query.state : "";
       const code = typeof req.query.code === "string" ? req.query.code : "";
-      if (!state || !code || !req.session.oidcState || !req.session.oidcNonce || !req.session.oidcVerifier) {
+      const sessionState = req.session.oidcState;
+      const nonce = req.session.oidcNonce || signedState?.nonce;
+      const verifier = req.session.oidcVerifier || signedState?.verifier;
+      if (!state || !code || (!sessionState && !signedState) || !nonce || !verifier) {
         throw new Error("Неполный ответ авторизации");
       }
-      const expected = Buffer.from(req.session.oidcState);
+      const expected = Buffer.from(sessionState || state);
       const actual = Buffer.from(state);
       if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
         throw new Error("Недействительный state");
       }
-      const claims = await exchangeCode(code, req.session.oidcVerifier, req.session.oidcNonce);
+      const claims = await exchangeCode(code, verifier, nonce);
       let user = await storage.getUserByOidcSubject(claims.sub);
       if (!user) user = await storage.getUserByEmail(claims.email);
       if (!user) {
