@@ -43,18 +43,27 @@ async function getConfig(): Promise<OidcConfig> {
   let metadata: Record<string, string> = {};
   const needsDiscovery = !process.env.OIDC_AUTHORIZATION_URL || !process.env.OIDC_TOKEN_URL || !process.env.OIDC_JWKS_URL;
   if (needsDiscovery) {
-    const discovery = await fetch(`${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`);
-    if (!discovery.ok) throw new Error(`OIDC discovery failed: ${discovery.status}`);
-    metadata = (await discovery.json()) as Record<string, string>;
+    try {
+      const discovery = await fetch(`${issuer}/.well-known/openid-configuration`);
+      if (discovery.ok) metadata = (await discovery.json()) as Record<string, string>;
+    } catch (error) {
+      // Some Yandex Cloud container networks cannot reach the discovery endpoint.
+      // The documented endpoints below allow login to proceed without discovery.
+      console.warn("OIDC discovery unavailable; using configured Yandex endpoints", error);
+    }
   }
+  const authorizationUrl = process.env.OIDC_AUTHORIZATION_URL || metadata.authorization_endpoint || `${issuer}/oauth/authorize`;
+  const tokenUrl = process.env.OIDC_TOKEN_URL || metadata.token_endpoint || `${issuer}/oauth/token`;
+  const userInfoUrl = process.env.OIDC_USERINFO_URL || metadata.userinfo_endpoint || `${issuer}/oauth/userinfo`;
+  const jwksUrl = process.env.OIDC_JWKS_URL || metadata.jwks_uri || `${issuer}/oauth/jwks`;
   return {
     clientId: required("OIDC_CLIENT_ID"),
     clientSecret: required("OIDC_CLIENT_SECRET"),
     issuer,
-    authorizationUrl: process.env.OIDC_AUTHORIZATION_URL || metadata.authorization_endpoint || required("OIDC_AUTHORIZATION_URL"),
-    tokenUrl: process.env.OIDC_TOKEN_URL || metadata.token_endpoint || required("OIDC_TOKEN_URL"),
-    userInfoUrl: process.env.OIDC_USERINFO_URL || metadata.userinfo_endpoint,
-    jwksUrl: process.env.OIDC_JWKS_URL || metadata.jwks_uri || required("OIDC_JWKS_URL"),
+    authorizationUrl,
+    tokenUrl,
+    userInfoUrl,
+    jwksUrl,
     redirectUri: required("OIDC_REDIRECT_URI"),
     scope: process.env.OIDC_SCOPE || "openid email profile",
   };
