@@ -65,6 +65,12 @@ function clearAuthCookie(res: Response): void {
   res.append("Set-Cookie", `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
 }
 
+function saveSession(req: Request): Promise<void> {
+  return new Promise((resolve, reject) => {
+    req.session.save((error) => (error ? reject(error) : resolve()));
+  });
+}
+
 // ===================== Типы и расширения =====================
 
 declare global {
@@ -471,6 +477,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.userId = targetUser.id;
       req.session.loginSessionId = testLoginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
+      setAuthCookie(res, targetUser.id, testLoginSession.id);
+      await saveSession(req);
 
       const { password: _, ...publicUser } = targetUser;
       res.json({ ...publicUser, isImpersonating: true });
@@ -501,6 +509,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.loginSessionId = administratorLoginSession.id;
       req.session.lastActivityTrackedAt = Date.now();
       delete req.session.impersonatorUserId;
+      setAuthCookie(res, administrator.id, administratorLoginSession.id);
+      await saveSession(req);
 
       const { password: _, ...publicUser } = administrator;
       res.json({ ...publicUser, isImpersonating: false });
