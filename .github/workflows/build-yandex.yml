@@ -91,14 +91,10 @@ jobs:
             --description "ManagerPlanner ${GITHUB_SHA}"
           )
 
-          MEMORY_VALUE="$(jq -r '.resources.memory // empty' "$CURRENT_REVISION_JSON")"
-          # The API may return memory as MB for older revisions while the CLI
-          # deploy command expects bytes. Normalize only the unambiguously
-          # small values; byte values are kept unchanged.
-          if [[ "$MEMORY_VALUE" =~ ^[0-9]+$ ]] && (( MEMORY_VALUE > 0 && MEMORY_VALUE < 134217728 )); then
-            MEMORY_VALUE=$((MEMORY_VALUE * 1024 * 1024))
-          fi
-          add_if_set --memory "$MEMORY_VALUE"
+          # Serverless Containers requires memory in bytes. The revision API
+          # may expose a legacy value that the deploy CLI rejects, so use the
+          # known-good 512 MiB container setting explicitly.
+          add_if_set --memory "536870912"
           add_if_set --cores "$(jq -r '.resources.cores // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --core-fraction "$(jq -r '.resources.core_fraction // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
