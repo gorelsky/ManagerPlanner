@@ -36,6 +36,7 @@ jobs:
           yc config profile create managerplanner-ci
           yc config set service-account-key "$RUNNER_TEMP/yc-key.json"
           yc config set endpoint api.cloud.yandex.net:443
+          yc config set folder-id b1guifh3jm90buadtm6g
           yc iam create-token | docker login --username iam --password-stdin cr.yandex
 
       - name: Build and push image
