@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+      YC_CONTAINER_ID: bbabfk16fcbb19rm4phm
       IMAGE_NAME: managerplanner
     steps:
       - name: Checkout
@@ -47,3 +48,71 @@ jobs:
       - name: Publish image reference
         shell: bash
         run: echo "Published $IMAGE"
+
+      - name: Deploy new Yandex Container revision
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # A Serverless Container revision contains the runtime configuration,
+          # not only the image. Read the active revision and carry its settings
+          # (environment, Lockbox refs, network and limits) into the new one.
+          # This prevents a release from accidentally dropping production config.
+          CURRENT_REVISION_JSON="$RUNNER_TEMP/current-revision.json"
+          REVISION_LIST_JSON="$RUNNER_TEMP/revisions.json"
+
+          yc serverless container revision list \
+            --container-id "$YC_CONTAINER_ID" \
+            --format json > "$REVISION_LIST_JSON"
+
+          ACTIVE_REVISION_ID="$(jq -r '
+            [.. | objects | select(.status? == "ACTIVE" and .id? != null) | .id][0] // empty
+          ' "$REVISION_LIST_JSON")"
+          if [[ -z "$ACTIVE_REVISION_ID" ]]; then
+            echo "Active Yandex Container revision was not found" >&2
+            exit 1
+          fi
+
+          yc serverless container revision get "$ACTIVE_REVISION_ID" \
+            --format json > "$CURRENT_REVISION_JSON"
+
+          add_if_set() {
+            local flag="$1"
+            local value="$2"
+            if [[ -n "$value" && "$value" != "null" ]]; then
+              DEPLOY_ARGS+=("$flag" "$value")
+            fi
+          }
+
+          DEPLOY_ARGS=(
+            --image "$IMAGE"
+            --description "ManagerPlanner ${GITHUB_SHA}"
+          )
+
+          add_if_set --memory "$(jq -r '.resources.memory // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --cores "$(jq -r '.resources.cores // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --core-fraction "$(jq -r '.resources.core_fraction // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --concurrency "$(jq -r '.concurrency // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --service-account-id "$(jq -r '.service_account_id // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --network-id "$(jq -r '.connectivity.network_id // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --min-instances "$(jq -r '.provision_policy.min_instances // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --zone-instances-limit "$(jq -r '.scaling_policy.zone_instances_limit // empty' "$CURRENT_REVISION_JSON")"
+          add_if_set --zone-requests-limit "$(jq -r '.scaling_policy.zone_requests_limit // empty' "$CURRENT_REVISION_JSON")"
+
+          while IFS= read -r pair; do
+            [[ -z "$pair" ]] || DEPLOY_ARGS+=(--environment "$pair")
+          done < <(jq -r '
+            (.image_spec.environment // {}) | to_entries[] | "\(.key)=\(.value)"
+          ' "$CURRENT_REVISION_JSON")
+
+          while IFS= read -r secret; do
+            [[ -z "$secret" ]] || DEPLOY_ARGS+=(--secret "$secret")
+          done < <(jq -r '
+            (.secrets // [])[] |
+            "id=\(.id),version-id=\(.version_id),key=\(.key),environment-variable=\(.environment_variable)"
+          ' "$CURRENT_REVISION_JSON")
+
+          yc serverless container revision deploy \
+            --container-id "$YC_CONTAINER_ID" \
+            "${DEPLOY_ARGS[@]}"
