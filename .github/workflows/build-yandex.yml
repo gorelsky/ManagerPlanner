@@ -91,10 +91,10 @@ jobs:
             --description "ManagerPlanner ${GITHUB_SHA}"
           )
 
-          # Serverless Containers requires memory in bytes. The revision API
-          # may expose a legacy value that the deploy CLI rejects, so use the
-          # known-good 512 MiB container setting explicitly.
-          add_if_set --memory "536870912"
+          # The Yandex CLI accepts human-readable byte sizes. Use the same
+          # 512 MiB value as the active revision without relying on the
+          # legacy value returned by the revision API.
+          add_if_set --memory "512MB"
           add_if_set --cores "$(jq -r '.resources.cores // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --core-fraction "$(jq -r '.resources.core_fraction // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
