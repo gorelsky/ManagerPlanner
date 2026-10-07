@@ -110,10 +110,15 @@ jobs:
           add_if_set --zone-requests-limit "$(jq -r '.scaling_policy.zone_requests_limit // empty' "$CURRENT_REVISION_JSON")"
 
           while IFS= read -r pair; do
-            [[ -z "$pair" ]] || DEPLOY_ARGS+=(--environment "$pair")
+            [[ -z "$pair" || "$pair" == DATABASE_TARGET=* ]] || DEPLOY_ARGS+=(--environment "$pair")
           done < <(jq -r '
             (.image_spec.environment // {}) | to_entries[] | "\(.key)=\(.value)"
           ' "$CURRENT_REVISION_JSON")
+
+          # The Yandex deployment must never fall back to the legacy Supabase
+          # connection path. The active revision may predate this variable, so
+          # replace any copied value with the explicit target used in production.
+          DEPLOY_ARGS+=(--environment "DATABASE_TARGET=yandex")
 
           while IFS= read -r secret; do
             [[ -z "$secret" ]] || DEPLOY_ARGS+=(--secret "$secret")
