@@ -38,6 +38,8 @@ jobs:
           yc config set endpoint api.cloud.yandex.net:443
           yc config set folder-id b1guifh3jm90buadtm6g
           yc iam create-token | docker login --username iam --password-stdin cr.yandex
+          echo "GitHub deploy identity:"
+          yc iam whoami
 
       - name: Build and push image
         shell: bash
