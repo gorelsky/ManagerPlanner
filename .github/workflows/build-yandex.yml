@@ -91,7 +91,14 @@ jobs:
             --description "ManagerPlanner ${GITHUB_SHA}"
           )
 
-          add_if_set --memory "$(jq -r '.resources.memory // empty' "$CURRENT_REVISION_JSON")"
+          MEMORY_VALUE="$(jq -r '.resources.memory // empty' "$CURRENT_REVISION_JSON")"
+          # The API may return memory as MB for older revisions while the CLI
+          # deploy command expects bytes. Normalize only the unambiguously
+          # small values; byte values are kept unchanged.
+          if [[ "$MEMORY_VALUE" =~ ^[0-9]+$ ]] && (( MEMORY_VALUE > 0 && MEMORY_VALUE < 134217728 )); then
+            MEMORY_VALUE=$((MEMORY_VALUE * 1024 * 1024))
+          fi
+          add_if_set --memory "$MEMORY_VALUE"
           add_if_set --cores "$(jq -r '.resources.cores // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --core-fraction "$(jq -r '.resources.core_fraction // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
