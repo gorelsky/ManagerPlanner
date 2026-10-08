@@ -110,7 +110,7 @@ jobs:
           add_if_set --zone-requests-limit "$(jq -r '.scaling_policy.zone_requests_limit // empty' "$CURRENT_REVISION_JSON")"
 
           while IFS= read -r pair; do
-            [[ -z "$pair" || "$pair" == DATABASE_TARGET=* ]] || DEPLOY_ARGS+=(--environment "$pair")
+            [[ -z "$pair" || "$pair" == DATABASE_TARGET=* || "$pair" == YANDEX_PG_* ]] || DEPLOY_ARGS+=(--environment "$pair")
           done < <(jq -r '
             (.image_spec.environment // {}) | to_entries[] | "\(.key)=\(.value)"
           ' "$CURRENT_REVISION_JSON")
@@ -119,6 +119,11 @@ jobs:
           # connection path. The active revision may predate this variable, so
           # replace any copied value with the explicit target used in production.
           DEPLOY_ARGS+=(--environment "DATABASE_TARGET=yandex")
+          DEPLOY_ARGS+=(--environment "YANDEX_PG_HOST=rc1b-qcnd5806atkojaop.mdb.yandexcloud.net")
+          DEPLOY_ARGS+=(--environment "YANDEX_PG_PORT=6432")
+          DEPLOY_ARGS+=(--environment "YANDEX_PG_DATABASE=managerplanner")
+          DEPLOY_ARGS+=(--environment "YANDEX_PG_USER=user1")
+          DEPLOY_ARGS+=(--environment "YANDEX_PG_SSL_CA_FILE=/app/deploy/yandex-postgresql-ca.pem")
 
           while IFS= read -r secret; do
             [[ -z "$secret" ]] || DEPLOY_ARGS+=(--secret "$secret")
