@@ -102,9 +102,10 @@ jobs:
           add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --concurrency "$(jq -r '.concurrency // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --service-account-id "$(jq -r '.service_account_id // empty' "$CURRENT_REVISION_JSON")"
-          # The active ManagerPlanner revision is intentionally public-network
-          # only (the database endpoint is public). Do not copy a legacy or
-          # synthetic connectivity value returned by the API.
+          # Attach the container to the same VPC as Managed PostgreSQL. Without
+          # this route the database hostname resolves, but connections time out
+          # and the serverless runtime repeatedly reschedules the instance.
+          add_if_set --network-id "enp4mtbr3qo20e2kn3th"
           add_if_set --min-instances "$(jq -r '.provision_policy.min_instances // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --zone-instances-limit "$(jq -r '.scaling_policy.zone_instances_limit // empty' "$CURRENT_REVISION_JSON")"
           add_if_set --zone-requests-limit "$(jq -r '.scaling_policy.zone_requests_limit // empty' "$CURRENT_REVISION_JSON")"
