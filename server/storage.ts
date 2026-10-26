@@ -36,7 +36,7 @@ import {
   type ActivityHistoryWithActor,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
+import { eq, and, gte, lt, lte, desc, asc, or, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { planningExcelDate } from "@shared/planning-time";
@@ -642,6 +642,19 @@ export class DatabaseStorage implements IStorage {
             `Строка CSV ${lineNumber + 2}: менеджер не найден "${managerUsername}"`,
           );
         }
+        // Replace all previously imported rows for this manager/region in
+        // the same quarter. Otherwise an older import with a later weekStart
+        // can win the dashboard's "latest row" selection.
+        const quarterStart = new Date(weekStart.getFullYear(), Math.floor(weekStart.getMonth() / 3) * 3, 1);
+        const nextQuarterStart = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1);
+        await tx
+          .delete(managerPlanPerformance)
+          .where(and(
+            eq(managerPlanPerformance.managerId, manager[0].id),
+            eq(managerPlanPerformance.region, region),
+            gte(managerPlanPerformance.weekStart, quarterStart),
+            lt(managerPlanPerformance.weekStart, nextQuarterStart),
+          ));
         await tx
           .insert(managerPlanPerformance)
           .values({
