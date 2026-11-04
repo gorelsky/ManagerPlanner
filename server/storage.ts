@@ -76,7 +76,7 @@ export interface IStorage {
   getAllManagerCities(): Promise<ManagerCityWithDetails[]>;
   importManagerCitiesFromCsv(csvData: string): Promise<{ imported: number }>;
   getManagerPlanPerformance(managerId?: string): Promise<ManagerPlanPerformanceWithManager[]>;
-  importManagerPlanPerformance(csvData: string): Promise<{ imported: number }>;
+  importManagerPlanPerformance(csvData: string, options?: { allowReplace?: boolean }): Promise<{ imported: number }>;
 
   // Employees
   getEmployeesByManager(managerId: string): Promise<EmployeeWithDetails[]>;
@@ -541,7 +541,10 @@ export class DatabaseStorage implements IStorage {
     return Array.from(latest.values());
   }
 
-  async importManagerPlanPerformance(csvData: string): Promise<{ imported: number }> {
+  async importManagerPlanPerformance(
+    csvData: string,
+    options: { allowReplace?: boolean } = {},
+  ): Promise<{ imported: number }> {
     const lines = csvData
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -587,6 +590,35 @@ export class DatabaseStorage implements IStorage {
     const planIndex = indexOf("planamount", "plan_amount", "plan");
     const actualIndex = indexOf("actualamount", "actual_amount", "actual", "fact");
 
+    // A source file must contain one authoritative row per manager/region/quarter.
+    // Without this check the per-row delete below would erase an earlier row
+    // from the same batch before inserting the next one.
+    const seenQuarterKeys = new Set<string>();
+    for (let index = 1; index < lines.length; index += 1) {
+      const values = parseLine(lines[index]);
+      if (values.length !== headers.length) {
+        throw new Error(`Строка CSV ${index + 1}: число полей не совпадает с заголовком`);
+      }
+      const manager = values[managerIndex]?.trim().toLowerCase();
+      const region = values[regionIndex]?.trim().toLowerCase();
+      const dateText = values[weekIndex]?.trim() ?? "";
+      if (!manager || !region) {
+        throw new Error(`Строка CSV ${index + 1}: пустой менеджер или регион`);
+      }
+      let date: Date;
+      try {
+        date = parsePlanPerformanceWeek(dateText);
+      } catch (error) {
+        throw new Error(`Строка CSV ${index + 1}: ${error instanceof Error ? error.message : "некорректная дата"}`);
+      }
+      const quarter = Math.floor(date.getMonth() / 3);
+      const key = `${manager}|${region}|${date.getFullYear()}|${quarter}`;
+      if (seenQuarterKeys.has(key)) {
+        throw new Error(`Строка CSV ${index + 1}: повтор менеджера/региона за один квартал; импорт отменён`);
+      }
+      seenQuarterKeys.add(key);
+    }
+
     return db.transaction(async (tx) => {
       let imported = 0;
       const dataLines = lines.slice(1);
@@ -622,14 +654,14 @@ export class DatabaseStorage implements IStorage {
         if (!region) {
           throw new Error(`Строка CSV ${lineNumber + 2}: пустой region`);
         }
-        if (!Number.isFinite(planAmount)) {
+        if (!Number.isFinite(planAmount) || planAmount < 0) {
           throw new Error(
-            `Строка CSV ${lineNumber + 2}: некорректный planAmount "${values[planIndex] ?? ""}"`,
+            `Строка CSV ${lineNumber + 2}: некорректный planAmount (ожидается число не меньше нуля) "${values[planIndex] ?? ""}"`,
           );
         }
-        if (!Number.isFinite(actualAmount)) {
+        if (!Number.isFinite(actualAmount) || actualAmount < 0) {
           throw new Error(
-            `Строка CSV ${lineNumber + 2}: некорректный actualAmount "${values[actualIndex] ?? ""}"`,
+            `Строка CSV ${lineNumber + 2}: некорректный actualAmount (ожидается число не меньше нуля) "${values[actualIndex] ?? ""}"`,
           );
         }
         const manager = await tx
@@ -647,6 +679,19 @@ export class DatabaseStorage implements IStorage {
         // can win the dashboard's "latest row" selection.
         const quarterStart = new Date(weekStart.getFullYear(), Math.floor(weekStart.getMonth() / 3) * 3, 1);
         const nextQuarterStart = new Date(quarterStart.getFullYear(), quarterStart.getMonth() + 3, 1);
+        const existing = await tx
+          .select({ id: managerPlanPerformance.id })
+          .from(managerPlanPerformance)
+          .where(and(
+            eq(managerPlanPerformance.managerId, manager[0].id),
+            eq(managerPlanPerformance.region, region),
+            gte(managerPlanPerformance.weekStart, quarterStart),
+            lt(managerPlanPerformance.weekStart, nextQuarterStart),
+          ))
+          .limit(1);
+        if (existing.length && !options.allowReplace) {
+          throw new Error(`Для ${managerUsername} / ${region} за Q${Math.floor(weekStart.getMonth() / 3) + 1} ${weekStart.getFullYear()} уже есть данные. Повторная загрузка заблокирована; для подтверждённой замены передайте allowReplace=true.`);
+        }
         await tx
           .delete(managerPlanPerformance)
           .where(and(
@@ -861,7 +906,14 @@ export class DatabaseStorage implements IStorage {
   async initializeUsers(): Promise<void> {
     const existingUsers = await db.select().from(users);
     if (existingUsers.length === 0) {
-      const hashedPassword = await hashPassword("admin123");
+      const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? "";
+      const passwordBytes = Buffer.byteLength(bootstrapPassword, "utf8");
+      if (passwordBytes < 16 || passwordBytes > 72) {
+        throw new Error(
+          "BOOTSTRAP_ADMIN_PASSWORD is required (16–72 UTF-8 bytes) when initializing the first administrator",
+        );
+      }
+      const hashedPassword = await hashPassword(bootstrapPassword);
       await db.insert(users).values([
         {
           username: "admin",

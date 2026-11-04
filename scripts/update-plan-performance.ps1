@@ -5,27 +5,7 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$d = [char]0x0414
-$v = [char]0x0412
-$m = [char]0x041C
-$p = [char]0x041F
-$two = "2"
-$dataRoot = Get-ChildItem -LiteralPath "D:\" -Directory | Where-Object { $_.Name -like "$d*$m$p" } | Select-Object -First 1
-$inputRoot = if ($dataRoot) { Get-ChildItem -LiteralPath $dataRoot.FullName -Directory | Where-Object { $_.Name -like "$v*" } | Select-Object -First 1 }
-$defaultSource = if ($inputRoot) {
-  (Get-ChildItem -LiteralPath $inputRoot.FullName -File | Where-Object { $_.Name -like "$d*$m$p$two.xlsx" } | Select-Object -First 1).FullName
-}
-$sourceFile = if ($env:PLAN_SOURCE_FILE) { $env:PLAN_SOURCE_FILE } else { $defaultSource }
-
-if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
-  $fallbacks = if ($inputRoot) {
-    @(
-      (Get-ChildItem -LiteralPath $inputRoot.FullName -File | Where-Object { $_.Name -like "$d*$m$p$two.xlsx" } | Select-Object -First 1).FullName,
-      (Get-ChildItem -LiteralPath $inputRoot.FullName -File | Where-Object { $_.Name -eq "plan-performance.xlsx" } | Select-Object -First 1).FullName
-    )
-  }
-  $sourceFile = $fallbacks | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
-}
+$sourceFile = $env:PLAN_SOURCE_FILE
 
 $apiUrl = if ($env:PLAN_IMPORT_API_URL) { $env:PLAN_IMPORT_API_URL } else { "https://managerplanner.up.railway.app" }
 $tokenFile = Join-Path $scriptDir "plan-import-token.txt"
@@ -43,9 +23,21 @@ if (-not $token) {
   exit 2
 }
 if (-not $sourceFile) {
-  Write-ImportLog "ERROR: source workbook not found."
-  Write-Host "Source workbook not found in D:\data input folder"
+  Write-ImportLog "ERROR: PLAN_SOURCE_FILE is required; automatic first-match selection is disabled."
+  Write-Host "Set PLAN_SOURCE_FILE to the exact workbook path; no file was selected."
   exit 3
+}
+if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+  Write-ImportLog "ERROR: source workbook does not exist: $sourceFile"
+  Write-Host "Source workbook not found: $sourceFile"
+  exit 3
+}
+$source = Get-Item -LiteralPath $sourceFile
+$maxAgeDays = if ($env:PLAN_SOURCE_MAX_AGE_DAYS) { [int]$env:PLAN_SOURCE_MAX_AGE_DAYS } else { 30 }
+if ($maxAgeDays -lt 0 -or $source.LastWriteTime -lt (Get-Date).AddDays(-$maxAgeDays)) {
+  Write-ImportLog ("ERROR: source workbook is older than {0} days: {1}" -f $maxAgeDays, $source.LastWriteTime)
+  Write-Host ("Source workbook is stale (modified {0}); refresh it or set PLAN_SOURCE_MAX_AGE_DAYS deliberately." -f $source.LastWriteTime)
+  exit 4
 }
 
 Write-ImportLog "Starting source workbook upload: $sourceFile"

@@ -50,7 +50,7 @@ const parseAmount = value => {
     .replace(/\s/g, "")
     .replace(/[₽$€]/g, "")
     .replace(",", "."));
-  if (!Number.isFinite(parsed)) throw new Error(`Некорректная сумма "${value ?? ""}"`);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`Некорректная сумма (ожидается число не меньше нуля): "${value ?? ""}"`);
   return parsed.toFixed(2);
 };
 
@@ -104,7 +104,11 @@ const mappingFromWorkbook = rows => {
     if (!email) continue;
     const region = String(regionIndex >= 0 ? row[regionIndex] ?? "" : values[3] ?? "").trim();
     if (!region) continue;
-    mapping.set(normalizeRegion(region), {
+    const key = normalizeRegion(region);
+    if (mapping.has(key)) {
+      throw new Error(`Неоднозначное сопоставление региона "${region}": дублируется ключ "${key}" в книге доступа`);
+    }
+    mapping.set(key, {
       email,
       weekStart: weekStartIndex >= 0 ? formatExcelDate(row[weekStartIndex]) : undefined,
     });
@@ -143,6 +147,7 @@ if (findHeaderRow(sourceRows) >= 0) {
   const mappingRows = mappingWorkbook.SheetNames
     .flatMap(sheetName => XLSX.utils.sheet_to_json(mappingWorkbook.Sheets[sheetName], { header: 1, defval: "" }));
   const regionToEmail = mappingFromWorkbook(mappingRows);
+  if (regionToEmail.size === 0) throw new Error("В книге сопоставления не найдены пользователи с ролью ТМ и регионом");
   if (!sourceSheet) throw new Error('В файле отсутствует лист "План-факт тотал в рублях"');
   const rows = sourceRows;
   const headerIndex = findHeaderRow(rows);
@@ -184,36 +189,45 @@ if (findHeaderRow(sourceRows) >= 0) {
     if (Number.isInteger(planIndex) && selectedQuarter && planIndex + 1 < headers.length) {
       // The report's visible regional totals are laid out as Plan, Fact, %.
       // The Fact header is merged in Excel and may be blank in the cell grid.
-      actualIndex = planIndex + 1;
+      const adjacent = headers[planIndex + 1];
+      if (!adjacent || /^факт q[1-4] \d{4}$/.test(adjacent)) actualIndex = planIndex + 1;
     }
   }
   if (!selectedQuarter || !Number.isInteger(planIndex) || !Number.isInteger(actualIndex)) {
     throw new Error("Не найдены парные колонки плана и факта для одного квартала");
   }
   const { quarter, year } = selectedQuarter;
+  const now = new Date();
+  const currentKey = now.getFullYear() * 10 + Math.floor(now.getMonth() / 3) + 1;
+  const previousDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+  const previousKey = previousDate.getFullYear() * 10 + Math.floor(previousDate.getMonth() / 3) + 1;
+  const selectedKey = year * 10 + quarter;
+  if (process.env.PLAN_ALLOW_HISTORICAL_IMPORT !== "1" && selectedKey < previousKey) {
+    throw new Error(`Книга содержит только устаревший квартал Q${quarter} ${year}; текущий период Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}. Для осознанной исторической загрузки задайте PLAN_ALLOW_HISTORICAL_IMPORT=1.`);
+  }
+  if (selectedKey > currentKey) throw new Error(`Книга содержит будущий квартал Q${quarter} ${year}; импорт отменён`);
   console.log(`Selected quarter Q${quarter} ${year}: plan="${headers[planIndex]}", fact="${headers[actualIndex]}"`);
   const regionIndex = newFormat ? headers.findIndex(value => value === "регион рф") : 0;
   const quarterStartMonth = (quarter - 1) * 3 + 1;
   const quarterStart = `01.${String(quarterStartMonth).padStart(2, "0")}.${year}`;
   const output = ["managerEmail,region,weekStart,planAmount,actualAmount"];
   const missingRegions = [];
+  const preparedRegionKeys = new Set();
   for (const row of rows.slice(headerIndex + 1)) {
     if (newFormat && parseQuarterPeriod(row[periodIndex])?.key !== selectedQuarter.key) continue;
     const rawRegion = String(row[regionIndex] ?? "").trim();
     if (!/итог(?:о)?\s*$/i.test(rawRegion) || /общий итог/i.test(rawRegion)) continue;
     const region = rawRegion.replace(/\s+итог(?:о)?\s*$/i, "").trim();
     const sourceRegionKey = normalizeRegion(region);
-    let mapping = regionToEmail.get(sourceRegionKey);
-    if (!mapping) {
-      const fuzzy = [...regionToEmail.entries()].find(([key]) =>
-        key.includes(sourceRegionKey) || sourceRegionKey.includes(key),
-      );
-      mapping = fuzzy?.[1];
-    }
+    const mapping = regionToEmail.get(sourceRegionKey);
     if (!mapping) {
       missingRegions.push(region);
       continue;
     }
+    if (preparedRegionKeys.has(sourceRegionKey)) {
+      throw new Error(`Регион "${region}" встречается в выбранном квартале несколько раз; импорт отменён`);
+    }
+    preparedRegionKeys.add(sourceRegionKey);
     console.log(`Prepared region ${region}: plan=${row[planIndex]} fact=${row[actualIndex]}`);
     const mappingDate = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(mapping.weekStart || "");
     const mappingMatchesQuarter = mappingDate
@@ -228,13 +242,11 @@ if (findHeaderRow(sourceRows) >= 0) {
       parseAmount(row[actualIndex]),
     ].map(escapeCsv).join(","));
   }
-  if (missingRegions.length) {
-    console.log(`Пропущены регионы без пользователя с ролью ТМ: ${[...new Set(missingRegions)].join(", ")}`);
-  }
+  if (missingRegions.length) throw new Error(`Не найдены точные сопоставления регионам: ${[...new Set(missingRegions)].join(", ")}`);
   if (output.length === 1) throw new Error("В листе не найдены строки регионов с итогами");
   fileName = `plan-performance-q${quarter}-${year}.csv`;
   file = Buffer.from(output.join("\n"), "utf8");
-  console.log(`Prepared ${output.length - 1} regional Q4 rows from ${path.basename(filePath)}`);
+  console.log(`Prepared ${output.length - 1} regional Q${quarter} ${year} rows from ${path.basename(filePath)}`);
 }
 
 const controller = new AbortController();
@@ -250,6 +262,7 @@ try {
     body: JSON.stringify({
       fileName,
       fileBase64: file.toString("base64"),
+      allowReplace: process.env.PLAN_IMPORT_ALLOW_REPLACE === "1",
     }),
     signal: controller.signal,
   });

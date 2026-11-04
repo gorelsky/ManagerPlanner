@@ -238,6 +238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.initializeActivityTypes();
   } catch (error) {
     console.error("Failed to initialize data:", error);
+    throw error;
   }
 
   // ----- Публичные маршруты (не требуют аутентификации) -----
@@ -396,6 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = z.object({
         fileName: z.string().trim().min(1).max(255),
         fileBase64: z.string().min(1).max(18_000_000),
+        allowReplace: z.boolean().optional().default(false),
       }).parse(req.body);
       const fileBuffer = Buffer.from(payload.fileBase64, "base64");
       if (fileBuffer.length === 0) {
@@ -416,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Поддерживаются только CSV, XLS и XLSX" });
       }
 
-      const result = await storage.importManagerPlanPerformance(csvData);
+      const result = await storage.importManagerPlanPerformance(csvData, { allowReplace: payload.allowReplace });
       res.json({ ...result, fileName: payload.fileName });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -686,8 +688,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/plan-performance/import", requireAdmin, async (req, res) => {
     try {
-      const csvData = z.object({ csvData: z.string().min(1) }).parse(req.body).csvData;
-      const result = await storage.importManagerPlanPerformance(csvData);
+      const payload = z.object({ csvData: z.string().min(1), allowReplace: z.boolean().optional().default(false) }).parse(req.body);
+      const result = await storage.importManagerPlanPerformance(payload.csvData, { allowReplace: payload.allowReplace });
       res.json(result);
     } catch (error) {
       if (error instanceof z.ZodError) {
