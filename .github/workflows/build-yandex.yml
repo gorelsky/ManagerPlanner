@@ -10,129 +10,24 @@ permissions:
   contents: read
 
 jobs:
-  image:
+  build-and-push:
     runs-on: ubuntu-latest
     env:
-      YC_REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
-      YC_CONTAINER_ID: bbabfk16fcbb19rm4phm
-      IMAGE_NAME: managerplanner
+      IMAGE: cr.yandex/${{ secrets.YC_REGISTRY_ID }}/managerplanner
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Yandex Cloud CLI
-        shell: bash
-        run: |
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
-          echo "$HOME/yandex-cloud/bin" >> "$GITHUB_PATH"
-
-      - name: Configure Yandex Cloud credentials
-        shell: bash
+      - name: Log in to Yandex Container Registry
         env:
           YC_SERVICE_ACCOUNT_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY }}
         run: |
-          umask 077
-          printf '%s' "$YC_SERVICE_ACCOUNT_KEY" > "$RUNNER_TEMP/yc-key.json"
-          yc config profile create managerplanner-ci
-          yc config set service-account-key "$RUNNER_TEMP/yc-key.json"
-          yc config set endpoint api.cloud.yandex.net:443
-          yc config set folder-id b1guifh3jm90buadtm6g
-          yc iam create-token | docker login --username iam --password-stdin cr.yandex
-          echo "GitHub deploy identity:"
-          yc iam whoami
+          printf '%s' "$YC_SERVICE_ACCOUNT_KEY" | docker login cr.yandex --username json_key --password-stdin
 
-      - name: Build and push image
-        shell: bash
+      - name: Build image
+        run: docker build --tag "$IMAGE:${GITHUB_SHA}" --tag "$IMAGE:latest" .
+
+      - name: Push image
         run: |
-          IMAGE="cr.yandex/${YC_REGISTRY_ID}/${IMAGE_NAME}:${GITHUB_SHA}"
-          docker build --pull -t "$IMAGE" .
-          docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-
-      - name: Publish image reference
-        shell: bash
-        run: echo "Published $IMAGE"
-
-      - name: Deploy new Yandex Container revision
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # A Serverless Container revision contains the runtime configuration,
-          # not only the image. Read the active revision and carry its settings
-          # (environment, Lockbox refs, network and limits) into the new one.
-          # This prevents a release from accidentally dropping production config.
-          CURRENT_REVISION_JSON="$RUNNER_TEMP/current-revision.json"
-          REVISION_LIST_JSON="$RUNNER_TEMP/revisions.json"
-
-          yc serverless container revision list \
-            --container-id "$YC_CONTAINER_ID" \
-            --format json > "$REVISION_LIST_JSON"
-
-          ACTIVE_REVISION_ID="$(jq -r '
-            [.. | objects | select(.status? == "ACTIVE" and .id? != null) | .id][0] // empty
-          ' "$REVISION_LIST_JSON")"
-          if [[ -z "$ACTIVE_REVISION_ID" ]]; then
-            echo "Active Yandex Container revision was not found" >&2
-            exit 1
-          fi
-
-          yc serverless container revision get "$ACTIVE_REVISION_ID" \
-            --format json > "$CURRENT_REVISION_JSON"
-
-          add_if_set() {
-            local flag="$1"
-            local value="$2"
-            if [[ -n "$value" && "$value" != "null" ]]; then
-              DEPLOY_ARGS+=("$flag" "$value")
-            fi
-          }
-
-          DEPLOY_ARGS=(
-            --image "$IMAGE"
-            --description "ManagerPlanner ${GITHUB_SHA}"
-          )
-
-          # The Yandex CLI accepts human-readable byte sizes. Use the same
-          # 512 MiB value as the active revision without relying on the
-          # legacy value returned by the revision API.
-          add_if_set --memory "512MB"
-          add_if_set --cores "$(jq -r '.resources.cores // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --core-fraction "$(jq -r '.resources.core_fraction // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --execution-timeout "$(jq -r '.execution_timeout // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --concurrency "$(jq -r '.concurrency // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --service-account-id "$(jq -r '.service_account_id // empty' "$CURRENT_REVISION_JSON")"
-          # Attach the container to the same VPC as Managed PostgreSQL. Without
-          # this route the database hostname resolves, but connections time out
-          # and the serverless runtime repeatedly reschedules the instance.
-          add_if_set --network-id "enp4mtbr3qo20e2kn3th"
-          add_if_set --min-instances "$(jq -r '.provision_policy.min_instances // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --zone-instances-limit "$(jq -r '.scaling_policy.zone_instances_limit // empty' "$CURRENT_REVISION_JSON")"
-          add_if_set --zone-requests-limit "$(jq -r '.scaling_policy.zone_requests_limit // empty' "$CURRENT_REVISION_JSON")"
-
-          while IFS= read -r pair; do
-            [[ -z "$pair" || "$pair" == DATABASE_TARGET=* || "$pair" == YANDEX_PG_* ]] || DEPLOY_ARGS+=(--environment "$pair")
-          done < <(jq -r '
-            (.image_spec.environment // {}) | to_entries[] | "\(.key)=\(.value)"
-          ' "$CURRENT_REVISION_JSON")
-
-          # The Yandex deployment must never fall back to the legacy Supabase
-          # connection path. The active revision may predate this variable, so
-          # replace any copied value with the explicit target used in production.
-          DEPLOY_ARGS+=(--environment "DATABASE_TARGET=yandex")
-          DEPLOY_ARGS+=(--environment "YANDEX_PG_HOST=rc1b-j4kpv7dpuomtkp0j.mdb.yandexcloud.net")
-          DEPLOY_ARGS+=(--environment "YANDEX_PG_PORT=6432")
-          DEPLOY_ARGS+=(--environment "YANDEX_PG_DATABASE=managerplanner")
-          DEPLOY_ARGS+=(--environment "YANDEX_PG_USER=managerplanner_app")
-          DEPLOY_ARGS+=(--environment "YANDEX_PG_SSL_CA_FILE=/app/deploy/yandex-postgresql-ca.pem")
-
-          while IFS= read -r secret; do
-            [[ -z "$secret" ]] || DEPLOY_ARGS+=(--secret "$secret")
-          done < <(jq -r '
-            (.secrets // [])[] |
-            "id=\(.id),version-id=\(.version_id),key=\(.key),environment-variable=\(.environment_variable)"
-          ' "$CURRENT_REVISION_JSON")
-
-          yc serverless container revision deploy \
-            --container-id "$YC_CONTAINER_ID" \
-            "${DEPLOY_ARGS[@]}"
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
