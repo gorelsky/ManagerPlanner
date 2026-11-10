@@ -22,7 +22,18 @@ jobs:
         env:
           YC_SERVICE_ACCOUNT_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY }}
         run: |
-          printf '%s' "$YC_SERVICE_ACCOUNT_KEY" | docker login cr.yandex --username json_key --password-stdin
+          key="$YC_SERVICE_ACCOUNT_KEY"
+          # Accept either the raw Yandex service-account JSON key or a
+          # base64-encoded value stored in GitHub Secrets.
+          if [[ "$key" != \{* ]]; then
+            decoded="$(printf '%s' "$key" | base64 --decode 2>/dev/null || true)"
+            if [[ "$decoded" == \{* ]]; then key="$decoded"; fi
+          fi
+          if [[ "$key" != \{* ]]; then
+            echo "YC_SERVICE_ACCOUNT_KEY is not a raw or base64-encoded JSON key" >&2
+            exit 1
+          fi
+          printf '%s' "$key" | docker login cr.yandex --username json_key --password-stdin
 
       - name: Build image
         run: docker build --tag "$IMAGE:${GITHUB_SHA}" --tag "$IMAGE:latest" .
