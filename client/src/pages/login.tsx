@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
-import logo from "@/assets/logo.jpg";
+import logo from "@/assets/logo-new-white.png";
 
 export default function Login() {
   const [username, setUsername] = useState("");
