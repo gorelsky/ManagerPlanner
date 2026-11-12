@@ -77,7 +77,7 @@ export default function Login() {
       <div className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-indigo-300/25 blur-3xl" />
       <div className="relative w-full max-w-md mx-auto">
         <div className="text-center mb-7">
-          <div className="mx-auto w-44 h-28 mb-4 flex items-center justify-center rounded-3xl bg-white shadow-xl shadow-primary/10 border border-white">
+          <div className="mx-auto w-44 h-28 mb-4 flex items-center justify-center rounded-3xl bg-[#2112b8] shadow-xl shadow-primary/20 border border-[#2112b8]">
             <img
               src={logo}
               alt="Логотип"
