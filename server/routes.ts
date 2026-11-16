@@ -523,15 +523,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/change-password", async (req, res) => {
     try {
+      if (!req.user) {
+        return res.status(401).json({ message: "Сессия пользователя истекла. Войдите в приложение заново." });
+      }
       if (req.session.impersonatorUserId) {
         return res.status(403).json({
           message: "Смена пароля недоступна во время тестового входа",
         });
       }
       const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
-      const user = await storage.getUser(req.user!.id);
+      const user = await storage.getUser(req.user.id);
 
-      if (!user || !(await bcrypt.compare(currentPassword, user.password))) {
+      if (!user) {
+        return res.status(401).json({ message: "Пользователь текущей сессии не найден. Войдите заново." });
+      }
+
+      if (!(await bcrypt.compare(currentPassword, user.password))) {
         return res.status(400).json({ message: "Текущий пароль указан неверно" });
       }
 
