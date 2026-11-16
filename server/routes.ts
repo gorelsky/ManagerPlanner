@@ -347,9 +347,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Неверный логин или пароль" });
       }
 
-      await new Promise<void>((resolve, reject) => {
-        req.session.regenerate((error) => (error ? reject(error) : resolve()));
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          req.session.regenerate((error) => (error ? reject(error) : resolve()));
+        });
+      } catch (error) {
+        // A transient PgStore failure must not make a valid password unusable.
+        // The signed auth cookie below is the fallback authentication channel.
+        console.error("Login session regeneration error:", error);
+      }
       // Login must not fail only because the optional audit row cannot be written
       // (for example, while a migrated database is still being repaired). Keep the
       // authenticated session alive and use a synthetic id; activity tracking is
