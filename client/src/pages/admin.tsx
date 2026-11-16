@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
@@ -131,6 +132,10 @@ export default function Admin() {
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(
     null,
   );
+  const [resetPasswordResult, setResetPasswordResult] = useState<{
+    user: (typeof testableUsers)[number];
+    temporaryPassword: string;
+  } | null>(null);
 
   if (user?.role !== "admin" && user?.role !== "director") {
     return (
@@ -309,6 +314,24 @@ export default function Admin() {
       toast({
         title: "Тестовый вход не выполнен",
         description: error.message || "Не удалось переключиться на пользователя",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: (userId: string) => userApi.resetPassword(userId),
+    onSuccess: (result) => {
+      setResetPasswordResult(result);
+      toast({
+        title: "Временный пароль создан",
+        description: "Передайте пароль пользователю и попросите сменить его после входа.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Не удалось сбросить пароль",
+        description: error.message || "Попробуйте ещё раз",
         variant: "destructive",
       });
     },
@@ -1143,18 +1166,28 @@ export default function Admin() {
                           {formatRole(testUser.role)} · {testUser.username}
                         </p>
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={testLoginMutation.isPending}
-                          >
-                            <LogIn className="mr-2 h-4 w-4" />
-                            Войти
-                          </Button>
-                        </AlertDialogTrigger>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={resetPasswordMutation.isPending}
+                          onClick={() => resetPasswordMutation.mutate(testUser.id)}
+                        >
+                          Сбросить пароль
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={testLoginMutation.isPending}
+                            >
+                              <LogIn className="mr-2 h-4 w-4" />
+                              Войти
+                            </Button>
+                          </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Начать тестовый вход?</AlertDialogTitle>
@@ -1171,10 +1204,25 @@ export default function Admin() {
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
-                      </AlertDialog>
+                        </AlertDialog>
+                      </div>
                     </div>
                   ))}
                 </div>
+              )}
+              {resetPasswordResult && (
+                <Alert className="mt-4 border-amber-300 bg-amber-50">
+                  <AlertTitle>Временный пароль создан</AlertTitle>
+                  <AlertDescription>
+                    <p className="mt-1">
+                      Пользователь: <strong>{resetPasswordResult.user.username}</strong>
+                    </p>
+                    <p className="mt-1">
+                      Временный пароль: <code className="rounded bg-white px-2 py-1 font-semibold tracking-wide">{resetPasswordResult.temporaryPassword}</code>
+                    </p>
+                    <p className="mt-2">После первого входа пользователь обязан сменить пароль в профиле.</p>
+                  </AlertDescription>
+                </Alert>
               )}
             </CardContent>
           </Card>

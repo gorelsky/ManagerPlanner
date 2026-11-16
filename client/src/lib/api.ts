@@ -67,6 +67,9 @@ export const userApi = {
   getTestableUsers: (): Promise<PublicUser[]> =>
     apiRequest("GET", "/api/users/testable").then((res) => res.json()),
 
+  resetPassword: (userId: string): Promise<{ user: PublicUser; temporaryPassword: string; message: string }> =>
+    apiRequest("POST", `/api/users/${userId}/reset-password`).then((res) => res.json()),
+
   startTestLogin: (userId: string): Promise<AuthenticatedUser> =>
     apiRequest("POST", `/api/auth/impersonate/${userId}`).then((res) => res.json()),
 

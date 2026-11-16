@@ -19,6 +19,7 @@ import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 import { changePasswordSchema } from "./passwords";
+import { createTemporaryPassword } from "./passwords";
 import {
   buildAuthorizationUrl,
   createOidcTransaction,
@@ -707,6 +708,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get testable users error:", error);
       res.status(500).json({ message: "Не удалось загрузить пользователей" });
+    }
+  });
+
+  app.post("/api/users/:id/reset-password", requireSystemAdmin, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "Пользователь не найден" });
+      }
+
+      const temporaryPassword = createTemporaryPassword();
+      await storage.updateUserPassword(user.id, temporaryPassword, true);
+      const { password: _, ...publicUser } = user;
+
+      res.json({
+        user: publicUser,
+        temporaryPassword,
+        message: "Временный пароль создан. Пользователь должен сменить его после первого входа.",
+      });
+    } catch (error) {
+      console.error("Reset user password error:", error);
+      res.status(500).json({ message: "Не удалось сбросить пароль" });
     }
   });
 
