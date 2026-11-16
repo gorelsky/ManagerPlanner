@@ -350,11 +350,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await new Promise<void>((resolve, reject) => {
         req.session.regenerate((error) => (error ? reject(error) : resolve()));
       });
-      const loginSession = await storage.createLoginSession(user);
+      // Login must not fail only because the optional audit row cannot be written
+      // (for example, while a migrated database is still being repaired). Keep the
+      // authenticated session alive and use a synthetic id; activity tracking is
+      // already best-effort and will simply skip the missing audit row.
+      let loginSessionId: string = crypto.randomUUID();
+      try {
+        const loginSession = await storage.createLoginSession(user);
+        loginSessionId = loginSession.id;
+      } catch (error) {
+        console.error("Login audit session creation error:", error);
+      }
       req.session.userId = user.id;
-      req.session.loginSessionId = loginSession.id;
+      req.session.loginSessionId = loginSessionId;
       req.session.lastActivityTrackedAt = Date.now();
-      setAuthCookie(res, user.id, loginSession.id);
+      setAuthCookie(res, user.id, loginSessionId);
       const { password: _, ...userWithoutPassword } = user;
       res.json({ ...userWithoutPassword, isImpersonating: false });
     } catch (error) {
