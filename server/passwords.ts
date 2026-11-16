@@ -3,15 +3,17 @@ import { z } from "zod";
 
 export const PASSWORD_MIN_LENGTH = 10;
 
+export const newPasswordSchema = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Новый пароль должен содержать минимум ${PASSWORD_MIN_LENGTH} символов`)
+  .max(128, "Новый пароль слишком длинный")
+  .regex(/[A-Za-zА-Яа-яЁё]/, "Добавьте в новый пароль хотя бы одну букву")
+  .regex(/\d/, "Добавьте в новый пароль хотя бы одну цифру");
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "Введите текущий пароль").max(128),
-    newPassword: z
-      .string()
-      .min(PASSWORD_MIN_LENGTH, `Новый пароль должен содержать минимум ${PASSWORD_MIN_LENGTH} символов`)
-      .max(128, "Новый пароль слишком длинный")
-      .regex(/[A-Za-zА-Яа-яЁё]/, "Добавьте в новый пароль хотя бы одну букву")
-      .regex(/\d/, "Добавьте в новый пароль хотя бы одну цифру"),
+    newPassword: newPasswordSchema,
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
     message: "Новый пароль должен отличаться от текущего",

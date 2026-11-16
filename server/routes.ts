@@ -18,7 +18,7 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
-import { changePasswordSchema } from "./passwords";
+import { changePasswordSchema, newPasswordSchema } from "./passwords";
 import { createTemporaryPassword } from "./passwords";
 import {
   buildAuthorizationUrl,
@@ -531,15 +531,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "Смена пароля недоступна во время тестового входа",
         });
       }
-      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
       const user = await storage.getUser(req.user.id);
 
       if (!user) {
         return res.status(401).json({ message: "Пользователь текущей сессии не найден. Войдите заново." });
       }
 
-      if (!(await bcrypt.compare(currentPassword, user.password))) {
-        return res.status(400).json({ message: "Текущий пароль указан неверно" });
+      let newPassword: string;
+      if (user.mustChangePassword) {
+        newPassword = newPasswordSchema.parse(req.body.newPassword);
+      } else {
+        const parsed = changePasswordSchema.parse(req.body);
+        newPassword = parsed.newPassword;
+        if (!(await bcrypt.compare(parsed.currentPassword, user.password))) {
+          return res.status(400).json({ message: "Текущий пароль указан неверно" });
+        }
       }
 
       await storage.updateUserPassword(user.id, newPassword, false);

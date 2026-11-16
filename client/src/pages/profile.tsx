@@ -39,7 +39,10 @@ export default function Profile() {
 
     setIsSaving(true);
     try {
-      await apiRequest("POST", "/api/auth/change-password", { currentPassword, newPassword });
+      await apiRequest("POST", "/api/auth/change-password", {
+        ...(user?.mustChangePassword ? {} : { currentPassword }),
+        newPassword,
+      });
       toast({
         title: "Пароль изменён",
         description: "Войдите в приложение с новым паролем.",
@@ -107,17 +110,19 @@ export default function Profile() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Текущий пароль</Label>
-                <Input
-                  id="current-password"
-                  type={showPasswords ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
+              {!user?.mustChangePassword && (
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Текущий пароль</Label>
+                  <Input
+                    id="current-password"
+                    type={showPasswords ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="new-password">Новый пароль</Label>
                 <Input
