@@ -21,50 +21,18 @@ import * as XLSX from "xlsx";
 import { changePasswordSchema, newPasswordSchema } from "./passwords";
 import { createTemporaryPassword } from "./passwords";
 import {
+  clearAuthCookie,
+  createAuthenticate,
+  endRequestLoginSessions,
+  setAuthCookie,
+} from "./authentication";
+import {
   buildAuthorizationUrl,
   createOidcTransaction,
   exchangeCode,
   isYandexOidcEnabled,
   readSignedOidcState,
 } from "./yandex-oidc";
-
-const AUTH_COOKIE_NAME = "mp_auth";
-const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
-
-function authCookieSecret(): string {
-  return process.env.SESSION_SECRET || "development-only-secret";
-}
-
-function signAuthCookie(userId: string, loginSessionId: string): string {
-  const expiresAt = Math.floor(Date.now() / 1000) + AUTH_COOKIE_MAX_AGE_SECONDS;
-  const payload = Buffer.from(`${userId}|${loginSessionId}|${expiresAt}`, "utf8").toString("base64url");
-  const signature = crypto.createHmac("sha256", authCookieSecret()).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
-}
-
-function readAuthCookie(req: Request): { userId: string; loginSessionId: string } | null {
-  const raw = req.headers.cookie?.split(";").map(value => value.trim()).find(value => value.startsWith(`${AUTH_COOKIE_NAME}=`));
-  if (!raw) return null;
-  const token = raw.slice(AUTH_COOKIE_NAME.length + 1);
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-  const expected = crypto.createHmac("sha256", authCookieSecret()).update(payload).digest("base64url");
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return null;
-  const [userId, loginSessionId, expiresAt] = Buffer.from(payload, "base64url").toString("utf8").split("|");
-  if (!userId || !loginSessionId || !expiresAt || Number(expiresAt) < Math.floor(Date.now() / 1000)) return null;
-  return { userId, loginSessionId };
-}
-
-function setAuthCookie(res: Response, userId: string, loginSessionId: string): void {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  res.setHeader("Set-Cookie", `${AUTH_COOKIE_NAME}=${signAuthCookie(userId, loginSessionId)}; Path=/; Max-Age=${AUTH_COOKIE_MAX_AGE_SECONDS}; HttpOnly; SameSite=Lax${secure}`);
-}
-
-function clearAuthCookie(res: Response): void {
-  res.append("Set-Cookie", `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
-}
 
 function saveSession(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -101,49 +69,7 @@ declare module "express-session" {
 
 // ===================== Middleware =====================
 
-async function authenticate(req: Request, res: Response, next: NextFunction) {
-  try {
-    const fallbackCookie = !req.session?.userId ? readAuthCookie(req) : null;
-    const userId = req.session?.userId || fallbackCookie?.userId;
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    if (fallbackCookie) {
-      req.session.userId = fallbackCookie.userId;
-      req.session.loginSessionId = fallbackCookie.loginSessionId;
-    }
-
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
-
-    req.user = {
-      id: user.id,
-      role: user.role || "user",
-      username: user.username,
-    };
-
-    const now = Date.now();
-    if (
-      req.session.loginSessionId &&
-      (!req.session.lastActivityTrackedAt ||
-        now - req.session.lastActivityTrackedAt >= 60_000)
-    ) {
-      try {
-        await storage.touchLoginSession(req.session.loginSessionId);
-        req.session.lastActivityTrackedAt = now;
-      } catch (error) {
-        console.error("Login session activity tracking error:", error);
-      }
-    }
-    next();
-  } catch (error) {
-    console.error("Authentication error:", error);
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-}
+const authenticate = createAuthenticate(storage);
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -356,16 +282,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // The signed auth cookie below is the fallback authentication channel.
         console.error("Login session regeneration error:", error);
       }
-      // Login must not fail only because the optional audit row cannot be written
-      // (for example, while a migrated database is still being repaired). Keep the
-      // authenticated session alive and use a synthetic id; activity tracking is
-      // already best-effort and will simply skip the missing audit row.
-      let loginSessionId: string = crypto.randomUUID();
+      let loginSessionId: string;
       try {
         const loginSession = await storage.createLoginSession(user);
         loginSessionId = loginSession.id;
       } catch (error) {
         console.error("Login audit session creation error:", error);
+        return res.status(503).json({ message: "Сервис авторизации временно недоступен. Повторите попытку." });
       }
       req.session.userId = user.id;
       req.session.loginSessionId = loginSessionId;
@@ -384,19 +307,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Выход
   app.post("/api/auth/logout", async (req, res) => {
-    const loginSessionId = req.session.loginSessionId;
-    if (loginSessionId) {
-      try {
-        await storage.endLoginSession(loginSessionId);
-      } catch (error) {
-        console.error("Login session completion error:", error);
-      }
+    try {
+      await endRequestLoginSessions(req, storage);
+    } catch (error) {
+      console.error("Login session completion error:", error);
+      return res.status(503).json({ message: "Не удалось подтвердить завершение сеанса. Повторите попытку." });
     }
 
     req.session.destroy((err) => {
       if (err) {
-        console.error("Logout error:", err);
-        return res.status(500).json({ message: "Ошибка выхода" });
+        // The durable login-session revocation above is authoritative. The
+        // Express session store may be unavailable; its leftover session id
+        // cannot authenticate without an active login-session row.
+        console.error("Express session cleanup error after login revocation:", err);
       }
       res.clearCookie("connect.sid");
       clearAuthCookie(res);
