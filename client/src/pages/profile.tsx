@@ -47,7 +47,16 @@ export default function Profile() {
         title: "Пароль изменён",
         description: "Войдите в приложение с новым паролем.",
       });
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      const logoutResponse = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      if (!logoutResponse.ok) {
+        const payload = await logoutResponse.json().catch(() => null);
+        toast({
+          title: "Пароль изменён, но выход не завершён",
+          description: payload?.message || "Повторите выход, когда сервис авторизации станет доступен.",
+          variant: "destructive",
+        });
+        return;
+      }
       logout();
     } catch (error) {
       toast({ title: "Ошибка", description: errorMessage(error), variant: "destructive" });

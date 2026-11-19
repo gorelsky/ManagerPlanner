@@ -16,10 +16,28 @@ export default function SideMenu() {
   if (!user) return null;
 
   const handleLogout = async () => {
-    setOpen(false);
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => undefined);
-    logout();
-    window.location.assign("/");
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        toast({
+          title: "Не удалось выйти",
+          description: payload?.message || "Сервис авторизации временно недоступен. Повторите попытку.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setOpen(false);
+      logout();
+      window.location.assign("/");
+    } catch {
+      toast({
+        title: "Не удалось выйти",
+        description: "Нет связи с сервером. Повторите попытку.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleStopTestLogin = async () => {

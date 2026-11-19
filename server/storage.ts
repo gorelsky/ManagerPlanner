@@ -63,6 +63,7 @@ export interface IStorage {
     user: User,
     options?: { isTestSession?: boolean; initiatedByUsername?: string },
   ): Promise<UserLoginSession>;
+  isLoginSessionActive(id: string, userId: string): Promise<boolean>;
   touchLoginSession(id: string): Promise<void>;
   endLoginSession(id: string): Promise<void>;
   getLoginSessions(limit?: number): Promise<UserLoginSession[]>;
@@ -268,6 +269,19 @@ export class DatabaseStorage implements IStorage {
         durationSeconds: sql`GREATEST(0, EXTRACT(EPOCH FROM (NOW() - ${userLoginSessions.loginAt}))::integer)`,
       })
       .where(and(eq(userLoginSessions.id, id), isNull(userLoginSessions.logoutAt)));
+  }
+
+  async isLoginSessionActive(id: string, userId: string): Promise<boolean> {
+    const [loginSession] = await db
+      .select({ id: userLoginSessions.id })
+      .from(userLoginSessions)
+      .where(and(
+        eq(userLoginSessions.id, id),
+        eq(userLoginSessions.userId, userId),
+        isNull(userLoginSessions.logoutAt),
+      ))
+      .limit(1);
+    return Boolean(loginSession);
   }
 
   async endLoginSession(id: string): Promise<void> {
